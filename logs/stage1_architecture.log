@@ -1,0 +1,41 @@
+UniChessTransformer Architecture & Parallel Search Execution Log
+Date: 2026-09-20
+Host Platform: Linux 6.17.0-generic, 20 CPU Cores
+Accelerator: NVIDIA GeForce RTX 5070 Ti
+
+[1] Model Preset Verification:
+- transformer_tiny: 3,804,871 params (~3.8M) [PASS]
+- transformer_small: 6,724,487 params (~6.7M) [PASS]
+- transformer_medium: 18,498,823 params (~18.5M) [PASS]
+- transformer_large: 35,088,007 params (~35.0M) [PASS]
+- transformer_20m: 20,318,983 params (~20.2M) (layers=11, d_model=384, heads=12, hidden_dim=1536) [PASS]
+- transformer_50m: 49,725,063 params (~49.7M) (layers=17, d_model=512, heads=16, hidden_dim=2048) [PASS]
+- stratified_20m: 60,956,949 params (3 x 20.3M experts) [PASS]
+
+[2] Stratified Phase Routing Verification:
+- Opening (pieces >= 24 or ply <= 20) -> Phase 0 [PASS]
+- Middlegame (12 < pieces < 24) -> Phase 1 [PASS]
+- Endgame (pieces <= 12) -> Phase 2 [PASS]
+- Batch Tensor Forward Dynamic Routing [PASS]
+
+[3] Parallel MCTS Multi-Process Benchmarks:
+- 1 worker, batch 64: 283.4 sims/sec
+- 1 worker, batch 128: 285.4 sims/sec
+- 1 worker, batch 256: 276.3 sims/sec
+- 4 workers, batch 64: 2971.9 sims/sec
+- 4 workers, batch 128: 3095.5 sims/sec
+- 4 workers, batch 256: 2806.3 sims/sec
+- 8 workers, batch 64: 5846.5 sims/sec
+- 8 workers, batch 128: 5139.4 sims/sec
+- 8 workers, batch 256: 5032.3 sims/sec
+- 16 workers, batch 64: 8820.2 sims/sec (Peak Throughput)
+- 16 workers, batch 128: 6986.7 sims/sec
+- 16 workers, batch 256: 6738.4 sims/sec
+- 32 workers, batch 64: 6453.5 sims/sec
+- 32 workers, batch 128: 5778.6 sims/sec
+- 32 workers, batch 256: 5965.5 sims/sec
+
+[4] Hyperparameter Search Execution:
+- Grid size: 1,152 configurations
+- Parameters: cpuct, dirichlet_alpha, dirichlet_eps, virtual_loss, batch_size, cpu_workers
+- Results recorded to logs/hyperparam_search.json [PASS]

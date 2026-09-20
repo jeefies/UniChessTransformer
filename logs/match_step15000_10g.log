@@ -1,0 +1,47 @@
+2026-09-20 10:38:59,873 [INFO] Initializing engines for evaluation match...
+2026-09-20 10:39:00,712 [INFO] Engine 1: UniChessTransformer_20m (MCTS 160)
+2026-09-20 10:39:00,712 [INFO] Engine 2: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s)
+2026-09-20 10:39:00,712 [INFO] Total games scheduled: 10
+2026-09-20 10:39:00,712 [INFO] 
+--- Starting Game 1/10: White=UniChessTransformer_20m (MCTS 160) vs Black=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) ---
+2026-09-20 10:39:36,880 [INFO] Game 1 finished: Result=1-0, Moves=33, Plies=65, White avg time=0.47s, Black avg time=0.64s
+2026-09-20 10:39:36,880 [INFO] Current Match Score: UniChess 1.0 - 0.0 chess_ai
+2026-09-20 10:39:36,880 [INFO] 
+--- Starting Game 2/10: White=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) vs Black=UniChessTransformer_20m (MCTS 160) ---
+2026-09-20 10:40:35,419 [INFO] Game 2 finished: Result=0-1, Moves=54, Plies=108, White avg time=0.54s, Black avg time=0.54s
+2026-09-20 10:40:35,419 [INFO] Current Match Score: UniChess 2.0 - 0.0 chess_ai
+2026-09-20 10:40:35,419 [INFO] 
+--- Starting Game 3/10: White=UniChessTransformer_20m (MCTS 160) vs Black=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) ---
+2026-09-20 10:40:57,245 [INFO] Game 3 finished: Result=1-0, Moves=20, Plies=39, White avg time=0.49s, Black avg time=0.63s
+2026-09-20 10:40:57,245 [INFO] Current Match Score: UniChess 3.0 - 0.0 chess_ai
+2026-09-20 10:40:57,245 [INFO] 
+--- Starting Game 4/10: White=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) vs Black=UniChessTransformer_20m (MCTS 160) ---
+2026-09-20 10:41:14,134 [INFO] Game 4 finished: Result=0-1, Moves=16, Plies=32, White avg time=0.64s, Black avg time=0.41s
+2026-09-20 10:41:14,134 [INFO] Current Match Score: UniChess 4.0 - 0.0 chess_ai
+2026-09-20 10:41:14,134 [INFO] 
+--- Starting Game 5/10: White=UniChessTransformer_20m (MCTS 160) vs Black=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) ---
+2026-09-20 10:42:06,882 [INFO] Game 5 finished: Result=1-0, Moves=49, Plies=97, White avg time=0.51s, Black avg time=0.58s
+2026-09-20 10:42:06,882 [INFO] Current Match Score: UniChess 5.0 - 0.0 chess_ai
+2026-09-20 10:42:06,882 [INFO] 
+--- Starting Game 6/10: White=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) vs Black=UniChessTransformer_20m (MCTS 160) ---
+2026-09-20 10:43:18,763 [INFO] Game 6 finished: Result=1/2-1/2, Moves=65, Plies=130, White avg time=0.54s, Black avg time=0.57s
+2026-09-20 10:43:18,763 [INFO] Current Match Score: UniChess 5.5 - 0.5 chess_ai
+2026-09-20 10:43:18,763 [INFO] 
+--- Starting Game 7/10: White=UniChessTransformer_20m (MCTS 160) vs Black=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) ---
+2026-09-20 10:43:57,692 [INFO] Game 7 finished: Result=1/2-1/2, Moves=36, Plies=72, White avg time=0.46s, Black avg time=0.62s
+2026-09-20 10:43:57,694 [INFO] Current Match Score: UniChess 6.0 - 1.0 chess_ai
+2026-09-20 10:43:57,694 [INFO] 
+--- Starting Game 8/10: White=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) vs Black=UniChessTransformer_20m (MCTS 160) ---
+2026-09-20 10:44:31,894 [INFO] Game 8 finished: Result=1/2-1/2, Moves=34, Plies=67, White avg time=0.63s, Black avg time=0.38s
+2026-09-20 10:44:31,894 [INFO] Current Match Score: UniChess 6.5 - 1.5 chess_ai
+2026-09-20 10:44:31,894 [INFO] 
+--- Starting Game 9/10: White=UniChessTransformer_20m (MCTS 160) vs Black=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) ---
+2026-09-20 10:45:09,248 [INFO] Game 9 finished: Result=1-0, Moves=33, Plies=65, White avg time=0.52s, Black avg time=0.63s
+2026-09-20 10:45:09,248 [INFO] Current Match Score: UniChess 7.5 - 1.5 chess_ai
+2026-09-20 10:45:09,248 [INFO] 
+--- Starting Game 10/10: White=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) vs Black=UniChessTransformer_20m (MCTS 160) ---
+2026-09-20 10:45:35,296 [INFO] Game 10 finished: Result=0-1, Moves=23, Plies=46, White avg time=0.63s, Black avg time=0.50s
+2026-09-20 10:45:35,296 [INFO] Current Match Score: UniChess 8.5 - 1.5 chess_ai
+2026-09-20 10:45:35,297 [INFO] 
+================ MATCH COMPLETED ================
+2026-09-20 10:45:35,297 [INFO] Final Score: UniChessTransformer 8.5 - 1.5 chess_ai (10 games)

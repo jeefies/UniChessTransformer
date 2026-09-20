@@ -1,0 +1,38 @@
+No puzzle file specified, using built-in test suite.
+
+Evaluating 12 puzzles (MCTS: False, Sims: 0)...
+ID              | FEN                                 | Expected | Engine   | Result | Time (ms)
+------------------------------------------------------------------------------------------
+mate_1_01       | r1bqkb1r/pppp1ppp/2n5/4p2Q/2B1n3... | h5f7     | d2d3     | FAIL   |   283.90
+mate_1_02       | 6k1/5ppp/8/8/8/8/5PPP/R5K1 w - -... | a1a8     | a1a8     | PASS   |     2.66
+mate_1_03       | r1b2rk1/pp3ppp/2n5/1B1p4/3qn3/1P... | d4f2     | d4f2     | PASS   |     2.26
+mate_1_04       | r4rk1/5ppp/8/8/8/8/1B4QP/7K w - ... | g2g7     | b2g7     | FAIL   |     2.21
+mate_1_05       | 8/8/8/8/8/1k6/1p6/1K1R4 w - - 0 1   | d1d3     | d1d6     | FAIL   |     2.22
+fork_01         | r1bqk2r/pppp1ppp/2n5/4N3/1b1Pn3/... | d1g4     | d4d5     | FAIL   |     2.25
+fork_02         | r2qkb1r/pp2pppp/2n1b3/2pn4/2B5/2... | f3g5     | c3d5     | FAIL   |     2.24
+pin_01          | r1b1k2r/pppp1ppp/5n2/4q3/1bP5/2N... | a2a3     | a2a3     | PASS   |     2.21
+skewer_01       | 8/8/8/8/4K3/8/4Q3/3rk3 w - - 0 1    | e4f3     | e2d1     | FAIL   |     2.19
+deflect_01      | r1b2rk1/1pp2ppp/p7/4q3/2B5/5Q2/P... | f3f7     | f1e1     | FAIL   |     2.18
+smothered_01    | 6k1/5Npp/8/8/8/8/1Q4PP/6K1 w - -... | f7h6     | f7e5     | FAIL   |     2.18
+backrank_01     | 3r2k1/5ppp/8/8/8/8/5PPP/3RR1K1 w... | d1d8     | d1d8     | PASS   |     2.23
+------------------------------------------------------------------------------------------
+Top-1 Accuracy: 4/12 (33.33%) | Avg Latency: 25.73 ms/puzzle
+No puzzle file specified, using built-in test suite.
+
+Evaluating 12 puzzles (MCTS: True, Sims: 100)...
+ID              | FEN                                 | Expected | Engine   | Result | Time (ms)
+------------------------------------------------------------------------------------------
+mate_1_01       | r1bqkb1r/pppp1ppp/2n5/4p2Q/2B1n3... | h5f7     | h5f7     | PASS   |   311.06
+mate_1_02       | 6k1/5ppp/8/8/8/8/5PPP/R5K1 w - -... | a1a8     | a1a8     | PASS   |     8.61
+mate_1_03       | r1b2rk1/pp3ppp/2n5/1B1p4/3qn3/1P... | d4f2     | d4f2     | PASS   |   156.50
+mate_1_04       | r4rk1/5ppp/8/8/8/8/1B4QP/7K w - ... | g2g7     | g2g7     | PASS   |     9.27
+mate_1_05       | 8/8/8/8/8/1k6/1p6/1K1R4 w - - 0 1   | d1d3     | d1d2     | FAIL   |   125.98
+fork_01         | r1bqk2r/pppp1ppp/2n5/4N3/1b1Pn3/... | d1g4     | e5c6     | FAIL   |    74.83
+fork_02         | r2qkb1r/pp2pppp/2n1b3/2pn4/2B5/2... | f3g5     | c3d5     | FAIL   |   383.61
+pin_01          | r1b1k2r/pppp1ppp/5n2/4q3/1bP5/2N... | a2a3     | a2a3     | PASS   |   180.16
+skewer_01       | 8/8/8/8/4K3/8/4Q3/3rk3 w - - 0 1    | e4f3     | e4f3     | PASS   |     8.40
+deflect_01      | r1b2rk1/1pp2ppp/p7/4q3/2B5/5Q2/P... | f3f7     | a1e1     | FAIL   |   131.47
+smothered_01    | 6k1/5Npp/8/8/8/8/1Q4PP/6K1 w - -... | f7h6     | f7d8     | FAIL   |    74.22
+backrank_01     | 3r2k1/5ppp/8/8/8/8/5PPP/3RR1K1 w... | d1d8     | d1d8     | PASS   |     8.07
+------------------------------------------------------------------------------------------
+Top-1 Accuracy: 7/12 (58.33%) | Avg Latency: 122.68 ms/puzzle

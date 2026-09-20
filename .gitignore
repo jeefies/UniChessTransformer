@@ -1,0 +1,34 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Models, checkpoints and training artifacts
+runs/
+*.pt
+*.pth
+*.bin
+*.onnx
+
+# Large logs and match traces
+logs/*.json
+logs/*.pgn
+logs/*.stdout
+
+# External baseline cloned repos
+baseline/chess_ai/
+
+# Environments and testing
+.pytest_cache/
+.coverage
+htmlcov/
+.venv/
+env/
+venv/
+ENV/
+
+# System and editor
+.DS_Store
+.vscode/
+.idea/

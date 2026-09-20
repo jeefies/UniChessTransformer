@@ -1,0 +1,417 @@
+2026-09-20 12:13:39,473 [INFO] Initializing engines for 100-game match...
+2026-09-20 12:13:40,278 [INFO] Engine 1: UniChessTransformer_20m (MCTS 100)
+2026-09-20 12:13:40,279 [INFO] Engine 2: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s)
+2026-09-20 12:13:40,279 [INFO] Total games scheduled: 100 across 25 diverse opening lines
+2026-09-20 12:13:40,279 [INFO] 
+--- Game 1/100: [Italian Game (Giuoco Piano)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:13:48,087 [INFO] Game 1 finished: Result=1-0 (Checkmate (checkmate)), Moves=19, Plies=37, W_time=0.22s, B_time=0.28s
+2026-09-20 12:13:48,088 [INFO] Score: UniChess 1.0 - 0.0 chess_ai (1W / 0D / 0L, WinRate=100.0%, Elo=+1600±34050) ETA: 12.9m
+2026-09-20 12:13:48,088 [INFO] 
+--- Game 2/100: [Italian Game (Giuoco Piano)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:14:04,199 [INFO] Game 2 finished: Result=0-1 (Checkmate (checkmate)), Moves=34, Plies=68, W_time=0.29s, B_time=0.22s
+2026-09-20 12:14:04,199 [INFO] Score: UniChess 2.0 - 0.0 chess_ai (2W / 0D / 0L, WinRate=100.0%, Elo=+1600±24077) ETA: 19.5m
+2026-09-20 12:14:04,199 [INFO] 
+--- Game 3/100: [Ruy Lopez (Morphy Defense)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:14:18,763 [INFO] Game 3 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=33, Plies=65, W_time=0.20s, B_time=0.29s
+2026-09-20 12:14:18,763 [INFO] Score: UniChess 2.5 - 0.5 chess_ai (2W / 1D / 0L, WinRate=83.3%, Elo=+280±527) ETA: 20.7m
+2026-09-20 12:14:18,763 [INFO] 
+--- Game 4/100: [Ruy Lopez (Morphy Defense)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:14:28,230 [INFO] Game 4 finished: Result=0-1 (Checkmate (checkmate)), Moves=22, Plies=44, W_time=0.28s, B_time=0.21s
+2026-09-20 12:14:28,230 [INFO] Score: UniChess 3.5 - 0.5 chess_ai (3W / 1D / 0L, WinRate=87.5%, Elo=+338±515) ETA: 19.2m
+2026-09-20 12:14:28,230 [INFO] 
+--- Game 5/100: [Scotch Game] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:14:41,850 [INFO] Game 5 finished: Result=1-0 (Checkmate (checkmate)), Moves=32, Plies=63, W_time=0.20s, B_time=0.28s
+2026-09-20 12:14:41,850 [INFO] Score: UniChess 4.5 - 0.5 chess_ai (4W / 1D / 0L, WinRate=90.0%, Elo=+382±508) ETA: 19.5m
+2026-09-20 12:14:41,850 [INFO] 
+--- Game 6/100: [Scotch Game] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:15:09,535 [INFO] Game 6 finished: Result=1/2-1/2 (Draw by stalemate (stalemate)), Moves=50, Plies=100, W_time=0.28s, B_time=0.31s
+2026-09-20 12:15:09,536 [INFO] Score: UniChess 5.0 - 1.0 chess_ai (4W / 2D / 0L, WinRate=83.3%, Elo=+280±373) ETA: 23.3m
+2026-09-20 12:15:09,536 [INFO] 
+--- Game 7/100: [Four Knights Game] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:15:20,305 [INFO] Game 7 finished: Result=1-0 (Checkmate (checkmate)), Moves=25, Plies=49, W_time=0.21s, B_time=0.29s
+2026-09-20 12:15:20,305 [INFO] Score: UniChess 6.0 - 1.0 chess_ai (5W / 2D / 0L, WinRate=85.7%, Elo=+311±368) ETA: 22.1m
+2026-09-20 12:15:20,305 [INFO] 
+--- Game 8/100: [Four Knights Game] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:15:41,526 [INFO] Game 8 finished: Result=0-1 (Checkmate (checkmate)), Moves=45, Plies=90, W_time=0.28s, B_time=0.22s
+2026-09-20 12:15:41,526 [INFO] Score: UniChess 7.0 - 1.0 chess_ai (6W / 2D / 0L, WinRate=87.5%, Elo=+338±364) ETA: 23.2m
+2026-09-20 12:15:41,526 [INFO] 
+--- Game 9/100: [Petroff Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:15:53,424 [INFO] Game 9 finished: Result=1-0 (Checkmate (checkmate)), Moves=28, Plies=55, W_time=0.21s, B_time=0.27s
+2026-09-20 12:15:53,424 [INFO] Score: UniChess 8.0 - 1.0 chess_ai (7W / 2D / 0L, WinRate=88.9%, Elo=+361±361) ETA: 22.4m
+2026-09-20 12:15:53,424 [INFO] 
+--- Game 10/100: [Petroff Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:16:06,467 [INFO] Game 10 finished: Result=0-1 (Checkmate (checkmate)), Moves=30, Plies=60, W_time=0.28s, B_time=0.20s
+2026-09-20 12:16:06,467 [INFO] Score: UniChess 9.0 - 1.0 chess_ai (8W / 2D / 0L, WinRate=90.0%, Elo=+382±359) ETA: 21.9m
+2026-09-20 12:16:06,467 [INFO] 
+--- Game 11/100: [Sicilian Defense (Open / Najdorf setup)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:16:25,984 [INFO] Game 11 finished: Result=1-0 (Checkmate (checkmate)), Moves=39, Plies=77, W_time=0.26s, B_time=0.29s
+2026-09-20 12:16:25,984 [INFO] Score: UniChess 10.0 - 1.0 chess_ai (9W / 2D / 0L, WinRate=90.9%, Elo=+400±357) ETA: 22.3m
+2026-09-20 12:16:25,984 [INFO] 
+--- Game 12/100: [Sicilian Defense (Open / Najdorf setup)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:16:32,958 [INFO] Game 12 finished: Result=0-1 (Checkmate (checkmate)), Moves=17, Plies=34, W_time=0.31s, B_time=0.18s
+2026-09-20 12:16:32,958 [INFO] Score: UniChess 11.0 - 1.0 chess_ai (10W / 2D / 0L, WinRate=91.7%, Elo=+417±356) ETA: 21.1m
+2026-09-20 12:16:32,958 [INFO] 
+--- Game 13/100: [Sicilian Defense (Classical / Dragon setup)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:17:08,649 [INFO] Game 13 finished: Result=1-0 (Checkmate (checkmate)), Moves=70, Plies=139, W_time=0.25s, B_time=0.28s
+2026-09-20 12:17:08,649 [INFO] Score: UniChess 12.0 - 1.0 chess_ai (11W / 2D / 0L, WinRate=92.3%, Elo=+432±354) ETA: 23.2m
+2026-09-20 12:17:08,649 [INFO] 
+--- Game 14/100: [Sicilian Defense (Classical / Dragon setup)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:17:22,961 [INFO] Game 14 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=30, Plies=60, W_time=0.29s, B_time=0.24s
+2026-09-20 12:17:22,961 [INFO] Score: UniChess 12.5 - 1.5 chess_ai (11W / 3D / 0L, WinRate=89.3%, Elo=+368±294) ETA: 22.8m
+2026-09-20 12:17:22,961 [INFO] 
+--- Game 15/100: [Sicilian Defense (Alapin Variation)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:17:50,935 [INFO] Game 15 finished: Result=1-0 (Checkmate (checkmate)), Moves=52, Plies=103, W_time=0.30s, B_time=0.27s
+2026-09-20 12:17:50,935 [INFO] Score: UniChess 13.5 - 1.5 chess_ai (12W / 3D / 0L, WinRate=90.0%, Elo=+382±293) ETA: 23.7m
+2026-09-20 12:17:50,935 [INFO] 
+--- Game 16/100: [Sicilian Defense (Alapin Variation)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:18:15,338 [INFO] Game 16 finished: Result=1/2-1/2 (Draw by stalemate (stalemate)), Moves=49, Plies=98, W_time=0.29s, B_time=0.24s
+2026-09-20 12:18:15,338 [INFO] Score: UniChess 14.0 - 2.0 chess_ai (12W / 4D / 0L, WinRate=87.5%, Elo=+338±257) ETA: 24.1m
+2026-09-20 12:18:15,338 [INFO] 
+--- Game 17/100: [French Defense (Classical)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:18:21,428 [INFO] Game 17 finished: Result=1-0 (Checkmate (checkmate)), Moves=16, Plies=31, W_time=0.20s, B_time=0.29s
+2026-09-20 12:18:21,428 [INFO] Score: UniChess 15.0 - 2.0 chess_ai (13W / 4D / 0L, WinRate=88.2%, Elo=+350±256) ETA: 22.9m
+2026-09-20 12:18:21,428 [INFO] 
+--- Game 18/100: [French Defense (Classical)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:18:37,915 [INFO] Game 18 finished: Result=1/2-1/2 (Draw by stalemate (stalemate)), Moves=34, Plies=68, W_time=0.32s, B_time=0.21s
+2026-09-20 12:18:37,915 [INFO] Score: UniChess 15.5 - 2.5 chess_ai (13W / 5D / 0L, WinRate=86.1%, Elo=+317±232) ETA: 22.6m
+2026-09-20 12:18:37,915 [INFO] 
+--- Game 19/100: [French Defense (Advance Variation)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:18:48,813 [INFO] Game 19 finished: Result=1-0 (Checkmate (checkmate)), Moves=26, Plies=51, W_time=0.19s, B_time=0.29s
+2026-09-20 12:18:48,813 [INFO] Score: UniChess 16.5 - 2.5 chess_ai (14W / 5D / 0L, WinRate=86.8%, Elo=+328±231) ETA: 21.9m
+2026-09-20 12:18:48,813 [INFO] 
+--- Game 20/100: [French Defense (Advance Variation)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:18:57,935 [INFO] Game 20 finished: Result=0-1 (Checkmate (checkmate)), Moves=22, Plies=44, W_time=0.29s, B_time=0.18s
+2026-09-20 12:18:57,935 [INFO] Score: UniChess 17.5 - 2.5 chess_ai (15W / 5D / 0L, WinRate=87.5%, Elo=+338±230) ETA: 21.2m
+2026-09-20 12:18:57,935 [INFO] 
+--- Game 21/100: [Caro-Kann Defense (Classical)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:19:09,290 [INFO] Game 21 finished: Result=1-0 (Checkmate (checkmate)), Moves=27, Plies=53, W_time=0.19s, B_time=0.29s
+2026-09-20 12:19:09,291 [INFO] Score: UniChess 18.5 - 2.5 chess_ai (16W / 5D / 0L, WinRate=88.1%, Elo=+348±229) ETA: 20.6m
+2026-09-20 12:19:09,291 [INFO] 
+--- Game 22/100: [Caro-Kann Defense (Classical)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:19:41,389 [INFO] Game 22 finished: Result=1/2-1/2 (Draw by stalemate (stalemate)), Moves=62, Plies=124, W_time=0.24s, B_time=0.30s
+2026-09-20 12:19:41,389 [INFO] Score: UniChess 19.0 - 3.0 chess_ai (16W / 6D / 0L, WinRate=86.4%, Elo=+321±212) ETA: 21.3m
+2026-09-20 12:19:41,389 [INFO] 
+--- Game 23/100: [Caro-Kann Defense (Advance Variation)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:19:52,340 [INFO] Game 23 finished: Result=1-0 (Checkmate (checkmate)), Moves=26, Plies=51, W_time=0.19s, B_time=0.30s
+2026-09-20 12:19:52,340 [INFO] Score: UniChess 20.0 - 3.0 chess_ai (17W / 6D / 0L, WinRate=87.0%, Elo=+330±211) ETA: 20.8m
+2026-09-20 12:19:52,340 [INFO] 
+--- Game 24/100: [Caro-Kann Defense (Advance Variation)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:20:11,703 [INFO] Game 24 finished: Result=1/2-1/2 (Draw by stalemate (stalemate)), Moves=41, Plies=82, W_time=0.27s, B_time=0.23s
+2026-09-20 12:20:11,703 [INFO] Score: UniChess 20.5 - 3.5 chess_ai (17W / 7D / 0L, WinRate=85.4%, Elo=+307±197) ETA: 20.7m
+2026-09-20 12:20:11,703 [INFO] 
+--- Game 25/100: [Scandinavian Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:20:20,371 [INFO] Game 25 finished: Result=1-0 (Checkmate (checkmate)), Moves=24, Plies=47, W_time=0.14s, B_time=0.29s
+2026-09-20 12:20:20,372 [INFO] Score: UniChess 21.5 - 3.5 chess_ai (18W / 7D / 0L, WinRate=86.0%, Elo=+315±196) ETA: 20.0m
+2026-09-20 12:20:20,372 [INFO] 
+--- Game 26/100: [Scandinavian Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:20:29,696 [INFO] Game 26 finished: Result=0-1 (Checkmate (checkmate)), Moves=21, Plies=42, W_time=0.28s, B_time=0.24s
+2026-09-20 12:20:29,696 [INFO] Score: UniChess 22.5 - 3.5 chess_ai (19W / 7D / 0L, WinRate=86.5%, Elo=+323±196) ETA: 19.4m
+2026-09-20 12:20:29,696 [INFO] 
+--- Game 27/100: [Pirc Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:20:34,231 [INFO] Game 27 finished: Result=1-0 (Checkmate (checkmate)), Moves=14, Plies=27, W_time=0.15s, B_time=0.28s
+2026-09-20 12:20:34,231 [INFO] Score: UniChess 23.5 - 3.5 chess_ai (20W / 7D / 0L, WinRate=87.0%, Elo=+331±195) ETA: 18.7m
+2026-09-20 12:20:34,231 [INFO] 
+--- Game 28/100: [Pirc Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:20:46,063 [INFO] Game 28 finished: Result=0-1 (Checkmate (checkmate)), Moves=24, Plies=48, W_time=0.28s, B_time=0.28s
+2026-09-20 12:20:46,063 [INFO] Score: UniChess 24.5 - 3.5 chess_ai (21W / 7D / 0L, WinRate=87.5%, Elo=+338±195) ETA: 18.2m
+2026-09-20 12:20:46,063 [INFO] 
+--- Game 29/100: [Queen's Gambit Declined] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:21:29,429 [INFO] Game 29 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=65, Plies=129, W_time=0.42s, B_time=0.28s
+2026-09-20 12:21:29,429 [INFO] Score: UniChess 25.0 - 4.0 chess_ai (21W / 8D / 0L, WinRate=86.2%, Elo=+318±183) ETA: 19.1m
+2026-09-20 12:21:29,429 [INFO] 
+--- Game 30/100: [Queen's Gambit Declined] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:21:37,693 [INFO] Game 30 finished: Result=0-1 (Checkmate (checkmate)), Moves=20, Plies=40, W_time=0.29s, B_time=0.19s
+2026-09-20 12:21:37,693 [INFO] Score: UniChess 26.0 - 4.0 chess_ai (22W / 8D / 0L, WinRate=86.7%, Elo=+325±183) ETA: 18.6m
+2026-09-20 12:21:37,694 [INFO] 
+--- Game 31/100: [Queen's Gambit Accepted] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:21:50,591 [INFO] Game 31 finished: Result=1-0 (Checkmate (checkmate)), Moves=29, Plies=57, W_time=0.21s, B_time=0.29s
+2026-09-20 12:21:50,591 [INFO] Score: UniChess 27.0 - 4.0 chess_ai (23W / 8D / 0L, WinRate=87.1%, Elo=+332±182) ETA: 18.2m
+2026-09-20 12:21:50,591 [INFO] 
+--- Game 32/100: [Queen's Gambit Accepted] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:22:09,522 [INFO] Game 32 finished: Result=0-1 (Checkmate (checkmate)), Moves=39, Plies=78, W_time=0.28s, B_time=0.24s
+2026-09-20 12:22:09,522 [INFO] Score: UniChess 28.0 - 4.0 chess_ai (24W / 8D / 0L, WinRate=87.5%, Elo=+338±182) ETA: 18.0m
+2026-09-20 12:22:09,522 [INFO] 
+--- Game 33/100: [Slav Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:22:20,286 [INFO] Game 33 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=23, Plies=45, W_time=0.22s, B_time=0.33s
+2026-09-20 12:22:20,286 [INFO] Score: UniChess 28.5 - 4.5 chess_ai (24W / 9D / 0L, WinRate=86.4%, Elo=+321±173) ETA: 17.6m
+2026-09-20 12:22:20,286 [INFO] 
+--- Game 34/100: [Slav Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:22:32,053 [INFO] Game 34 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=28, Plies=56, W_time=0.30s, B_time=0.17s
+2026-09-20 12:22:32,053 [INFO] Score: UniChess 29.0 - 5.0 chess_ai (24W / 10D / 0L, WinRate=85.3%, Elo=+305±165) ETA: 17.2m
+2026-09-20 12:22:32,053 [INFO] 
+--- Game 35/100: [King's Indian Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:22:56,917 [INFO] Game 35 finished: Result=1-0 (Checkmate (checkmate)), Moves=54, Plies=107, W_time=0.23s, B_time=0.26s
+2026-09-20 12:22:56,917 [INFO] Score: UniChess 30.0 - 5.0 chess_ai (25W / 10D / 0L, WinRate=85.7%, Elo=+311±164) ETA: 17.2m
+2026-09-20 12:22:56,917 [INFO] 
+--- Game 36/100: [King's Indian Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:23:09,133 [INFO] Game 36 finished: Result=0-1 (Checkmate (checkmate)), Moves=26, Plies=52, W_time=0.28s, B_time=0.24s
+2026-09-20 12:23:09,133 [INFO] Score: UniChess 31.0 - 5.0 chess_ai (26W / 10D / 0L, WinRate=86.1%, Elo=+317±164) ETA: 16.9m
+2026-09-20 12:23:09,133 [INFO] 
+--- Game 37/100: [Nimzo-Indian Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:23:20,654 [INFO] Game 37 finished: Result=1-0 (Checkmate (checkmate)), Moves=27, Plies=53, W_time=0.20s, B_time=0.29s
+2026-09-20 12:23:20,654 [INFO] Score: UniChess 32.0 - 5.0 chess_ai (27W / 10D / 0L, WinRate=86.5%, Elo=+322±164) ETA: 16.5m
+2026-09-20 12:23:20,654 [INFO] 
+--- Game 38/100: [Nimzo-Indian Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:23:30,993 [INFO] Game 38 finished: Result=0-1 (Checkmate (checkmate)), Moves=24, Plies=48, W_time=0.28s, B_time=0.21s
+2026-09-20 12:23:30,993 [INFO] Score: UniChess 33.0 - 5.0 chess_ai (28W / 10D / 0L, WinRate=86.8%, Elo=+328±163) ETA: 16.1m
+2026-09-20 12:23:30,993 [INFO] 
+--- Game 39/100: [Queen's Indian Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:23:36,363 [INFO] Game 39 finished: Result=1-0 (Checkmate (checkmate)), Moves=16, Plies=31, W_time=0.15s, B_time=0.28s
+2026-09-20 12:23:36,364 [INFO] Score: UniChess 34.0 - 5.0 chess_ai (29W / 10D / 0L, WinRate=87.2%, Elo=+333±163) ETA: 15.5m
+2026-09-20 12:23:36,364 [INFO] 
+--- Game 40/100: [Queen's Indian Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:23:50,559 [INFO] Game 40 finished: Result=0-1 (Checkmate (checkmate)), Moves=34, Plies=68, W_time=0.28s, B_time=0.17s
+2026-09-20 12:23:50,559 [INFO] Score: UniChess 35.0 - 5.0 chess_ai (30W / 10D / 0L, WinRate=87.5%, Elo=+338±163) ETA: 15.3m
+2026-09-20 12:23:50,559 [INFO] 
+--- Game 41/100: [Grünfeld Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:24:26,209 [INFO] Game 41 finished: Result=0-1 (Checkmate (checkmate)), Moves=54, Plies=108, W_time=0.43s, B_time=0.27s
+2026-09-20 12:24:26,209 [INFO] Score: UniChess 35.0 - 6.0 chess_ai (30W / 10D / 1L, WinRate=85.4%, Elo=+306±150) ETA: 15.5m
+2026-09-20 12:24:26,209 [INFO] 
+--- Game 42/100: [Grünfeld Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:24:56,754 [INFO] Game 42 finished: Result=0-1 (Checkmate (checkmate)), Moves=62, Plies=124, W_time=0.27s, B_time=0.24s
+2026-09-20 12:24:56,754 [INFO] Score: UniChess 36.0 - 6.0 chess_ai (31W / 10D / 1L, WinRate=85.7%, Elo=+311±150) ETA: 15.6m
+2026-09-20 12:24:56,754 [INFO] 
+--- Game 43/100: [English Opening (Four Knights)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:25:05,280 [INFO] Game 43 finished: Result=1-0 (Checkmate (checkmate)), Moves=23, Plies=45, W_time=0.16s, B_time=0.28s
+2026-09-20 12:25:05,280 [INFO] Score: UniChess 37.0 - 6.0 chess_ai (32W / 10D / 1L, WinRate=86.0%, Elo=+316±150) ETA: 15.1m
+2026-09-20 12:25:05,280 [INFO] 
+--- Game 44/100: [English Opening (Four Knights)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:25:34,835 [INFO] Game 44 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=51, Plies=101, W_time=0.28s, B_time=0.34s
+2026-09-20 12:25:34,835 [INFO] Score: UniChess 37.5 - 6.5 chess_ai (32W / 11D / 1L, WinRate=85.2%, Elo=+304±145) ETA: 15.2m
+2026-09-20 12:25:34,835 [INFO] 
+--- Game 45/100: [English Opening (Symmetrical)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:25:47,091 [INFO] Game 45 finished: Result=1-0 (Checkmate (checkmate)), Moves=29, Plies=57, W_time=0.20s, B_time=0.28s
+2026-09-20 12:25:47,091 [INFO] Score: UniChess 38.5 - 6.5 chess_ai (33W / 11D / 1L, WinRate=85.6%, Elo=+309±144) ETA: 14.8m
+2026-09-20 12:25:47,091 [INFO] 
+--- Game 46/100: [English Opening (Symmetrical)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:25:59,166 [INFO] Game 46 finished: Result=0-1 (Checkmate (checkmate)), Moves=28, Plies=56, W_time=0.28s, B_time=0.20s
+2026-09-20 12:25:59,166 [INFO] Score: UniChess 39.5 - 6.5 chess_ai (34W / 11D / 1L, WinRate=85.9%, Elo=+313±144) ETA: 14.5m
+2026-09-20 12:25:59,166 [INFO] 
+--- Game 47/100: [Réti Opening] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:26:26,377 [INFO] Game 47 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=51, Plies=102, W_time=0.29s, B_time=0.27s
+2026-09-20 12:26:26,377 [INFO] Score: UniChess 40.0 - 7.0 chess_ai (34W / 12D / 1L, WinRate=85.1%, Elo=+303±139) ETA: 14.4m
+2026-09-20 12:26:26,377 [INFO] 
+--- Game 48/100: [Réti Opening] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:26:32,206 [INFO] Game 48 finished: Result=0-1 (Checkmate (checkmate)), Moves=15, Plies=30, W_time=0.28s, B_time=0.20s
+2026-09-20 12:26:32,206 [INFO] Score: UniChess 41.0 - 7.0 chess_ai (35W / 12D / 1L, WinRate=85.4%, Elo=+307±139) ETA: 13.9m
+2026-09-20 12:26:32,206 [INFO] 
+--- Game 49/100: [Dutch Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:26:46,358 [INFO] Game 49 finished: Result=1-0 (Checkmate (checkmate)), Moves=30, Plies=59, W_time=0.22s, B_time=0.31s
+2026-09-20 12:26:46,361 [INFO] Score: UniChess 42.0 - 7.0 chess_ai (36W / 12D / 1L, WinRate=85.7%, Elo=+311±139) ETA: 13.6m
+2026-09-20 12:26:46,361 [INFO] 
+--- Game 50/100: [Dutch Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:26:59,201 [INFO] Game 50 finished: Result=0-1 (Checkmate (checkmate)), Moves=26, Plies=52, W_time=0.33s, B_time=0.23s
+2026-09-20 12:26:59,201 [INFO] Score: UniChess 43.0 - 7.0 chess_ai (37W / 12D / 1L, WinRate=86.0%, Elo=+315±139) ETA: 13.3m
+2026-09-20 12:26:59,201 [INFO] 
+--- Game 51/100: [Italian Game (Giuoco Piano)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:27:06,350 [INFO] Game 51 finished: Result=1-0 (Checkmate (checkmate)), Moves=18, Plies=35, W_time=0.15s, B_time=0.34s
+2026-09-20 12:27:06,350 [INFO] Score: UniChess 44.0 - 7.0 chess_ai (38W / 12D / 1L, WinRate=86.3%, Elo=+319±139) ETA: 12.9m
+2026-09-20 12:27:06,350 [INFO] 
+--- Game 52/100: [Italian Game (Giuoco Piano)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:27:18,960 [INFO] Game 52 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=25, Plies=50, W_time=0.33s, B_time=0.24s
+2026-09-20 12:27:18,960 [INFO] Score: UniChess 44.5 - 7.5 chess_ai (38W / 13D / 1L, WinRate=85.6%, Elo=+309±134) ETA: 12.6m
+2026-09-20 12:27:18,960 [INFO] 
+--- Game 53/100: [Ruy Lopez (Morphy Defense)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:27:37,639 [INFO] Game 53 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=39, Plies=77, W_time=0.23s, B_time=0.29s
+2026-09-20 12:27:37,639 [INFO] Score: UniChess 45.0 - 8.0 chess_ai (38W / 14D / 1L, WinRate=84.9%, Elo=+300±131) ETA: 12.4m
+2026-09-20 12:27:37,640 [INFO] 
+--- Game 54/100: [Ruy Lopez (Morphy Defense)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:28:07,391 [INFO] Game 54 finished: Result=1/2-1/2 (Draw by stalemate (stalemate)), Moves=59, Plies=118, W_time=0.27s, B_time=0.26s
+2026-09-20 12:28:07,391 [INFO] Score: UniChess 45.5 - 8.5 chess_ai (38W / 15D / 1L, WinRate=84.3%, Elo=+291±127) ETA: 12.3m
+2026-09-20 12:28:07,391 [INFO] 
+--- Game 55/100: [Scotch Game] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:28:14,612 [INFO] Game 55 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=19, Plies=37, W_time=0.18s, B_time=0.28s
+2026-09-20 12:28:14,612 [INFO] Score: UniChess 46.0 - 9.0 chess_ai (38W / 16D / 1L, WinRate=83.6%, Elo=+283±124) ETA: 11.9m
+2026-09-20 12:28:14,612 [INFO] 
+--- Game 56/100: [Scotch Game] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:28:29,396 [INFO] Game 56 finished: Result=0-1 (Checkmate (checkmate)), Moves=33, Plies=66, W_time=0.29s, B_time=0.20s
+2026-09-20 12:28:29,396 [INFO] Score: UniChess 47.0 - 9.0 chess_ai (39W / 16D / 1L, WinRate=83.9%, Elo=+287±124) ETA: 11.6m
+2026-09-20 12:28:29,396 [INFO] 
+--- Game 57/100: [Four Knights Game] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:28:51,050 [INFO] Game 57 finished: Result=1/2-1/2 (Draw by stalemate (stalemate)), Moves=45, Plies=89, W_time=0.22s, B_time=0.30s
+2026-09-20 12:28:51,050 [INFO] Score: UniChess 47.5 - 9.5 chess_ai (39W / 17D / 1L, WinRate=83.3%, Elo=+280±121) ETA: 11.5m
+2026-09-20 12:28:51,050 [INFO] 
+--- Game 58/100: [Four Knights Game] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:29:01,517 [INFO] Game 58 finished: Result=0-1 (Checkmate (checkmate)), Moves=22, Plies=44, W_time=0.29s, B_time=0.26s
+2026-09-20 12:29:01,517 [INFO] Score: UniChess 48.5 - 9.5 chess_ai (40W / 17D / 1L, WinRate=83.6%, Elo=+283±121) ETA: 11.1m
+2026-09-20 12:29:01,517 [INFO] 
+--- Game 59/100: [Petroff Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:29:29,441 [INFO] Game 59 finished: Result=1/2-1/2 (Draw by stalemate (stalemate)), Moves=60, Plies=119, W_time=0.22s, B_time=0.27s
+2026-09-20 12:29:29,441 [INFO] Score: UniChess 49.0 - 10.0 chess_ai (40W / 18D / 1L, WinRate=83.1%, Elo=+276±118) ETA: 11.0m
+2026-09-20 12:29:29,441 [INFO] 
+--- Game 60/100: [Petroff Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:29:36,743 [INFO] Game 60 finished: Result=0-1 (Checkmate (checkmate)), Moves=18, Plies=36, W_time=0.29s, B_time=0.19s
+2026-09-20 12:29:36,743 [INFO] Score: UniChess 50.0 - 10.0 chess_ai (41W / 18D / 1L, WinRate=83.3%, Elo=+280±118) ETA: 10.6m
+2026-09-20 12:29:36,743 [INFO] 
+--- Game 61/100: [Sicilian Defense (Open / Najdorf setup)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:29:57,223 [INFO] Game 61 finished: Result=1-0 (Checkmate (checkmate)), Moves=48, Plies=95, W_time=0.18s, B_time=0.27s
+2026-09-20 12:29:57,223 [INFO] Score: UniChess 51.0 - 10.0 chess_ai (42W / 18D / 1L, WinRate=83.6%, Elo=+283±118) ETA: 10.4m
+2026-09-20 12:29:57,223 [INFO] 
+--- Game 62/100: [Sicilian Defense (Open / Najdorf setup)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:30:14,462 [INFO] Game 62 finished: Result=0-1 (Checkmate (checkmate)), Moves=38, Plies=76, W_time=0.29s, B_time=0.20s
+2026-09-20 12:30:14,462 [INFO] Score: UniChess 52.0 - 10.0 chess_ai (43W / 18D / 1L, WinRate=83.9%, Elo=+286±118) ETA: 10.2m
+2026-09-20 12:30:14,462 [INFO] 
+--- Game 63/100: [Sicilian Defense (Classical / Dragon setup)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:30:22,230 [INFO] Game 63 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=19, Plies=37, W_time=0.21s, B_time=0.29s
+2026-09-20 12:30:22,230 [INFO] Score: UniChess 52.5 - 10.5 chess_ai (43W / 19D / 1L, WinRate=83.3%, Elo=+280±115) ETA: 9.8m
+2026-09-20 12:30:22,230 [INFO] 
+--- Game 64/100: [Sicilian Defense (Classical / Dragon setup)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:30:31,472 [INFO] Game 64 finished: Result=0-1 (Checkmate (checkmate)), Moves=21, Plies=42, W_time=0.30s, B_time=0.21s
+2026-09-20 12:30:31,472 [INFO] Score: UniChess 53.5 - 10.5 chess_ai (44W / 19D / 1L, WinRate=83.6%, Elo=+283±115) ETA: 9.5m
+2026-09-20 12:30:31,472 [INFO] 
+--- Game 65/100: [Sicilian Defense (Alapin Variation)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:30:47,834 [INFO] Game 65 finished: Result=1-0 (Checkmate (checkmate)), Moves=34, Plies=67, W_time=0.26s, B_time=0.28s
+2026-09-20 12:30:47,834 [INFO] Score: UniChess 54.5 - 10.5 chess_ai (45W / 19D / 1L, WinRate=83.8%, Elo=+286±115) ETA: 9.2m
+2026-09-20 12:30:47,834 [INFO] 
+--- Game 66/100: [Sicilian Defense (Alapin Variation)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:31:02,580 [INFO] Game 66 finished: Result=0-1 (Checkmate (checkmate)), Moves=32, Plies=64, W_time=0.27s, B_time=0.23s
+2026-09-20 12:31:02,580 [INFO] Score: UniChess 55.5 - 10.5 chess_ai (46W / 19D / 1L, WinRate=84.1%, Elo=+289±115) ETA: 8.9m
+2026-09-20 12:31:02,580 [INFO] 
+--- Game 67/100: [French Defense (Classical)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:31:23,072 [INFO] Game 67 finished: Result=1-0 (Checkmate (checkmate)), Moves=42, Plies=83, W_time=0.25s, B_time=0.28s
+2026-09-20 12:31:23,102 [INFO] Score: UniChess 56.5 - 10.5 chess_ai (47W / 19D / 1L, WinRate=84.3%, Elo=+292±114) ETA: 8.7m
+2026-09-20 12:31:23,102 [INFO] 
+--- Game 68/100: [French Defense (Classical)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:31:32,614 [INFO] Game 68 finished: Result=1-0 (Checkmate (checkmate)), Moves=21, Plies=41, W_time=0.27s, B_time=0.27s
+2026-09-20 12:31:32,614 [INFO] Score: UniChess 56.5 - 11.5 chess_ai (47W / 19D / 2L, WinRate=83.1%, Elo=+277±110) ETA: 8.4m
+2026-09-20 12:31:32,614 [INFO] 
+--- Game 69/100: [French Defense (Advance Variation)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:31:44,535 [INFO] Game 69 finished: Result=1-0 (Checkmate (checkmate)), Moves=29, Plies=57, W_time=0.19s, B_time=0.28s
+2026-09-20 12:31:44,535 [INFO] Score: UniChess 57.5 - 11.5 chess_ai (48W / 19D / 2L, WinRate=83.3%, Elo=+280±110) ETA: 8.1m
+2026-09-20 12:31:44,535 [INFO] 
+--- Game 70/100: [French Defense (Advance Variation)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:32:01,100 [INFO] Game 70 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=38, Plies=75, W_time=0.28s, B_time=0.20s
+2026-09-20 12:32:01,100 [INFO] Score: UniChess 58.0 - 12.0 chess_ai (48W / 20D / 2L, WinRate=82.9%, Elo=+274±108) ETA: 7.9m
+2026-09-20 12:32:01,100 [INFO] 
+--- Game 71/100: [Caro-Kann Defense (Classical)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:32:11,024 [INFO] Game 71 finished: Result=1-0 (Checkmate (checkmate)), Moves=26, Plies=51, W_time=0.16s, B_time=0.28s
+2026-09-20 12:32:11,024 [INFO] Score: UniChess 59.0 - 12.0 chess_ai (49W / 20D / 2L, WinRate=83.1%, Elo=+277±108) ETA: 7.6m
+2026-09-20 12:32:11,024 [INFO] 
+--- Game 72/100: [Caro-Kann Defense (Classical)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:32:21,249 [INFO] Game 72 finished: Result=0-1 (Checkmate (checkmate)), Moves=24, Plies=48, W_time=0.28s, B_time=0.20s
+2026-09-20 12:32:21,249 [INFO] Score: UniChess 60.0 - 12.0 chess_ai (50W / 20D / 2L, WinRate=83.3%, Elo=+280±108) ETA: 7.3m
+2026-09-20 12:32:21,249 [INFO] 
+--- Game 73/100: [Caro-Kann Defense (Advance Variation)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:32:26,523 [INFO] Game 73 finished: Result=1-0 (Checkmate (checkmate)), Moves=15, Plies=29, W_time=0.16s, B_time=0.30s
+2026-09-20 12:32:26,523 [INFO] Score: UniChess 61.0 - 12.0 chess_ai (51W / 20D / 2L, WinRate=83.6%, Elo=+282±108) ETA: 6.9m
+2026-09-20 12:32:26,523 [INFO] 
+--- Game 74/100: [Caro-Kann Defense (Advance Variation)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:32:39,120 [INFO] Game 74 finished: Result=0-1 (Checkmate (checkmate)), Moves=28, Plies=56, W_time=0.33s, B_time=0.17s
+2026-09-20 12:32:39,120 [INFO] Score: UniChess 62.0 - 12.0 chess_ai (52W / 20D / 2L, WinRate=83.8%, Elo=+285±107) ETA: 6.7m
+2026-09-20 12:32:39,120 [INFO] 
+--- Game 75/100: [Scandinavian Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:32:46,557 [INFO] Game 75 finished: Result=1-0 (Checkmate (checkmate)), Moves=19, Plies=37, W_time=0.16s, B_time=0.32s
+2026-09-20 12:32:46,557 [INFO] Score: UniChess 63.0 - 12.0 chess_ai (53W / 20D / 2L, WinRate=84.0%, Elo=+288±107) ETA: 6.4m
+2026-09-20 12:32:46,557 [INFO] 
+--- Game 76/100: [Scandinavian Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:32:58,194 [INFO] Game 76 finished: Result=0-1 (Checkmate (checkmate)), Moves=24, Plies=48, W_time=0.33s, B_time=0.22s
+2026-09-20 12:32:58,194 [INFO] Score: UniChess 64.0 - 12.0 chess_ai (54W / 20D / 2L, WinRate=84.2%, Elo=+291±107) ETA: 6.1m
+2026-09-20 12:32:58,194 [INFO] 
+--- Game 77/100: [Pirc Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:33:06,640 [INFO] Game 77 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=19, Plies=38, W_time=0.19s, B_time=0.34s
+2026-09-20 12:33:06,640 [INFO] Score: UniChess 64.5 - 12.5 chess_ai (54W / 21D / 2L, WinRate=83.8%, Elo=+285±105) ETA: 5.8m
+2026-09-20 12:33:06,640 [INFO] 
+--- Game 78/100: [Pirc Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:33:16,441 [INFO] Game 78 finished: Result=0-1 (Checkmate (checkmate)), Moves=20, Plies=40, W_time=0.34s, B_time=0.24s
+2026-09-20 12:33:16,441 [INFO] Score: UniChess 65.5 - 12.5 chess_ai (55W / 21D / 2L, WinRate=84.0%, Elo=+288±105) ETA: 5.5m
+2026-09-20 12:33:16,441 [INFO] 
+--- Game 79/100: [Queen's Gambit Declined] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:33:27,122 [INFO] Game 79 finished: Result=1-0 (Checkmate (checkmate)), Moves=24, Plies=47, W_time=0.19s, B_time=0.33s
+2026-09-20 12:33:27,122 [INFO] Score: UniChess 66.5 - 12.5 chess_ai (56W / 21D / 2L, WinRate=84.2%, Elo=+290±105) ETA: 5.3m
+2026-09-20 12:33:27,122 [INFO] 
+--- Game 80/100: [Queen's Gambit Declined] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:33:36,460 [INFO] Game 80 finished: Result=0-1 (Checkmate (checkmate)), Moves=21, Plies=42, W_time=0.33s, B_time=0.19s
+2026-09-20 12:33:36,460 [INFO] Score: UniChess 67.5 - 12.5 chess_ai (57W / 21D / 2L, WinRate=84.4%, Elo=+293±105) ETA: 5.0m
+2026-09-20 12:33:36,460 [INFO] 
+--- Game 81/100: [Queen's Gambit Accepted] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:33:45,900 [INFO] Game 81 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=23, Plies=45, W_time=0.16s, B_time=0.33s
+2026-09-20 12:33:45,900 [INFO] Score: UniChess 68.0 - 13.0 chess_ai (57W / 22D / 2L, WinRate=84.0%, Elo=+287±103) ETA: 4.7m
+2026-09-20 12:33:45,900 [INFO] 
+--- Game 82/100: [Queen's Gambit Accepted] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:33:58,460 [INFO] Game 82 finished: Result=0-1 (Checkmate (checkmate)), Moves=26, Plies=52, W_time=0.33s, B_time=0.21s
+2026-09-20 12:33:58,460 [INFO] Score: UniChess 69.0 - 13.0 chess_ai (58W / 22D / 2L, WinRate=84.1%, Elo=+290±103) ETA: 4.5m
+2026-09-20 12:33:58,460 [INFO] 
+--- Game 83/100: [Slav Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:34:10,214 [INFO] Game 83 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=25, Plies=49, W_time=0.21s, B_time=0.34s
+2026-09-20 12:34:10,214 [INFO] Score: UniChess 69.5 - 13.5 chess_ai (58W / 23D / 2L, WinRate=83.7%, Elo=+285±101) ETA: 4.2m
+2026-09-20 12:34:10,214 [INFO] 
+--- Game 84/100: [Slav Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:34:17,106 [INFO] Game 84 finished: Result=0-1 (Checkmate (checkmate)), Moves=16, Plies=32, W_time=0.33s, B_time=0.20s
+2026-09-20 12:34:17,106 [INFO] Score: UniChess 70.5 - 13.5 chess_ai (59W / 23D / 2L, WinRate=83.9%, Elo=+287±101) ETA: 3.9m
+2026-09-20 12:34:17,106 [INFO] 
+--- Game 85/100: [King's Indian Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:34:40,653 [INFO] Game 85 finished: Result=1-0 (Checkmate (checkmate)), Moves=49, Plies=97, W_time=0.19s, B_time=0.33s
+2026-09-20 12:34:40,653 [INFO] Score: UniChess 71.5 - 13.5 chess_ai (60W / 23D / 2L, WinRate=84.1%, Elo=+290±101) ETA: 3.7m
+2026-09-20 12:34:40,653 [INFO] 
+--- Game 86/100: [King's Indian Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:35:06,954 [INFO] Game 86 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=51, Plies=102, W_time=0.33s, B_time=0.21s
+2026-09-20 12:35:06,954 [INFO] Score: UniChess 72.0 - 14.0 chess_ai (60W / 24D / 2L, WinRate=83.7%, Elo=+284±99) ETA: 3.5m
+2026-09-20 12:35:06,954 [INFO] 
+--- Game 87/100: [Nimzo-Indian Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:35:25,528 [INFO] Game 87 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=38, Plies=76, W_time=0.21s, B_time=0.32s
+2026-09-20 12:35:25,528 [INFO] Score: UniChess 72.5 - 14.5 chess_ai (60W / 25D / 2L, WinRate=83.3%, Elo=+280±98) ETA: 3.3m
+2026-09-20 12:35:25,528 [INFO] 
+--- Game 88/100: [Nimzo-Indian Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:35:39,211 [INFO] Game 88 finished: Result=0-1 (Checkmate (checkmate)), Moves=29, Plies=58, W_time=0.33s, B_time=0.20s
+2026-09-20 12:35:39,211 [INFO] Score: UniChess 73.5 - 14.5 chess_ai (61W / 25D / 2L, WinRate=83.5%, Elo=+282±98) ETA: 3.0m
+2026-09-20 12:35:39,211 [INFO] 
+--- Game 89/100: [Queen's Indian Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:35:55,131 [INFO] Game 89 finished: Result=1-0 (Checkmate (checkmate)), Moves=35, Plies=69, W_time=0.18s, B_time=0.33s
+2026-09-20 12:35:55,131 [INFO] Score: UniChess 74.5 - 14.5 chess_ai (62W / 25D / 2L, WinRate=83.7%, Elo=+284±98) ETA: 2.7m
+2026-09-20 12:35:55,131 [INFO] 
+--- Game 90/100: [Queen's Indian Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:36:09,542 [INFO] Game 90 finished: Result=0-1 (Checkmate (checkmate)), Moves=30, Plies=60, W_time=0.33s, B_time=0.20s
+2026-09-20 12:36:09,542 [INFO] Score: UniChess 75.5 - 14.5 chess_ai (63W / 25D / 2L, WinRate=83.9%, Elo=+287±98) ETA: 2.5m
+2026-09-20 12:36:09,542 [INFO] 
+--- Game 91/100: [Grünfeld Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:36:18,780 [INFO] Game 91 finished: Result=1-0 (Checkmate (checkmate)), Moves=20, Plies=39, W_time=0.23s, B_time=0.33s
+2026-09-20 12:36:18,780 [INFO] Score: UniChess 76.5 - 14.5 chess_ai (64W / 25D / 2L, WinRate=84.1%, Elo=+289±98) ETA: 2.2m
+2026-09-20 12:36:18,780 [INFO] 
+--- Game 92/100: [Grünfeld Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:36:30,690 [INFO] Game 92 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=24, Plies=47, W_time=0.33s, B_time=0.25s
+2026-09-20 12:36:30,690 [INFO] Score: UniChess 77.0 - 15.0 chess_ai (64W / 26D / 2L, WinRate=83.7%, Elo=+284±96) ETA: 2.0m
+2026-09-20 12:36:30,690 [INFO] 
+--- Game 93/100: [English Opening (Four Knights)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:36:38,702 [INFO] Game 93 finished: Result=1-0 (Checkmate (checkmate)), Moves=19, Plies=37, W_time=0.19s, B_time=0.32s
+2026-09-20 12:36:38,702 [INFO] Score: UniChess 78.0 - 15.0 chess_ai (65W / 26D / 2L, WinRate=83.9%, Elo=+286±96) ETA: 1.7m
+2026-09-20 12:36:38,702 [INFO] 
+--- Game 94/100: [English Opening (Four Knights)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:36:48,294 [INFO] Game 94 finished: Result=0-1 (Checkmate (checkmate)), Moves=22, Plies=44, W_time=0.33s, B_time=0.17s
+2026-09-20 12:36:48,294 [INFO] Score: UniChess 79.0 - 15.0 chess_ai (66W / 26D / 2L, WinRate=84.0%, Elo=+289±96) ETA: 1.5m
+2026-09-20 12:36:48,294 [INFO] 
+--- Game 95/100: [English Opening (Symmetrical)] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:37:03,062 [INFO] Game 95 finished: Result=1-0 (Checkmate (checkmate)), Moves=33, Plies=65, W_time=0.17s, B_time=0.33s
+2026-09-20 12:37:03,063 [INFO] Score: UniChess 80.0 - 15.0 chess_ai (67W / 26D / 2L, WinRate=84.2%, Elo=+291±96) ETA: 1.2m
+2026-09-20 12:37:03,063 [INFO] 
+--- Game 96/100: [English Opening (Symmetrical)] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:37:13,108 [INFO] Game 96 finished: Result=0-1 (Checkmate (checkmate)), Moves=22, Plies=44, W_time=0.33s, B_time=0.20s
+2026-09-20 12:37:13,108 [INFO] Score: UniChess 81.0 - 15.0 chess_ai (68W / 26D / 2L, WinRate=84.4%, Elo=+293±96) ETA: 1.0m
+2026-09-20 12:37:13,108 [INFO] 
+--- Game 97/100: [Réti Opening] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:37:24,175 [INFO] Game 97 finished: Result=1-0 (Checkmate (checkmate)), Moves=24, Plies=47, W_time=0.21s, B_time=0.33s
+2026-09-20 12:37:24,175 [INFO] Score: UniChess 82.0 - 15.0 chess_ai (69W / 26D / 2L, WinRate=84.5%, Elo=+295±96) ETA: 0.7m
+2026-09-20 12:37:24,175 [INFO] 
+--- Game 98/100: [Réti Opening] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:37:35,271 [INFO] Game 98 finished: Result=1/2-1/2 (Draw by threefold repetition), Moves=27, Plies=54, W_time=0.32s, B_time=0.13s
+2026-09-20 12:37:35,272 [INFO] Score: UniChess 82.5 - 15.5 chess_ai (69W / 27D / 2L, WinRate=84.2%, Elo=+290±94) ETA: 0.5m
+2026-09-20 12:37:35,272 [INFO] 
+--- Game 99/100: [Dutch Defense] W: UniChessTransformer_20m (MCTS 100) vs B: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) ---
+2026-09-20 12:38:00,432 [INFO] Game 99 finished: Result=1-0 (Checkmate (checkmate)), Moves=51, Plies=101, W_time=0.20s, B_time=0.33s
+2026-09-20 12:38:00,432 [INFO] Score: UniChess 83.5 - 15.5 chess_ai (70W / 27D / 2L, WinRate=84.3%, Elo=+293±94) ETA: 0.2m
+2026-09-20 12:38:00,432 [INFO] 
+--- Game 100/100: [Dutch Defense] W: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.25s) vs B: UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 12:38:13,252 [INFO] Game 100 finished: Result=0-1 (Checkmate (checkmate)), Moves=26, Plies=52, W_time=0.33s, B_time=0.22s
+2026-09-20 12:38:13,252 [INFO] Score: UniChess 84.5 - 15.5 chess_ai (71W / 27D / 2L, WinRate=84.5%, Elo=+295±94) ETA: 0.0m
+2026-09-20 12:38:13,252 [INFO] 
+================ 100-GAME MATCH COMPLETED ================
+2026-09-20 12:38:13,252 [INFO] Total Duration: 24.55 minutes
+2026-09-20 12:38:13,252 [INFO] Final Score: UniChess 84.5 - 15.5 chess_ai (100 games)
+2026-09-20 12:38:13,252 [INFO] Record: 71 Wins, 27 Draws, 2 Losses
+2026-09-20 12:38:13,252 [INFO] Score Percentage: 84.50%
+2026-09-20 12:38:13,252 [INFO] Relative Elo: +294.6 ± 94.1 (95% CI)
+2026-09-20 12:38:13,252 [INFO] Plies: Mean=62.2, Median=54, Min=27, Max=139
+2026-09-20 12:38:13,252 [INFO] Terminations:
+2026-09-20 12:38:13,252 [INFO]   - Checkmate (checkmate): 73 (73.0%)
+2026-09-20 12:38:13,252 [INFO]   - Draw by threefold repetition: 19 (19.0%)
+2026-09-20 12:38:13,252 [INFO]   - Draw by stalemate (stalemate): 8 (8.0%)
+2026-09-20 12:38:13,298 [INFO] Results recorded in logs/match_100g.log, logs/match_100g.pgn, and logs/match_100g.json

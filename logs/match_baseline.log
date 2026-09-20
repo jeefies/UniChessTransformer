@@ -1,0 +1,31 @@
+2026-09-20 09:36:43,511 [INFO] Initializing engines for evaluation match...
+2026-09-20 09:36:44,248 [INFO] Engine 1: UniChessTransformer_20m (MCTS 100)
+2026-09-20 09:36:44,248 [INFO] Engine 2: chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s)
+2026-09-20 09:36:44,248 [INFO] Total games scheduled: 6
+2026-09-20 09:36:44,248 [INFO] 
+--- Starting Game 1/6: White=UniChessTransformer_20m (MCTS 100) vs Black=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) ---
+2026-09-20 09:37:56,410 [INFO] Game 1 finished: Result=1/2-1/2, Moves=75, Plies=149, White avg time=0.41s, Black avg time=0.56s
+2026-09-20 09:37:56,410 [INFO] Current Match Score: UniChess 0.5 - 0.5 chess_ai
+2026-09-20 09:37:56,410 [INFO] 
+--- Starting Game 2/6: White=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) vs Black=UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 09:39:01,645 [INFO] Game 2 finished: Result=1-0, Moves=61, Plies=121, White avg time=0.61s, Black avg time=0.46s
+2026-09-20 09:39:01,645 [INFO] Current Match Score: UniChess 0.5 - 1.5 chess_ai
+2026-09-20 09:39:01,645 [INFO] 
+--- Starting Game 3/6: White=UniChessTransformer_20m (MCTS 100) vs Black=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) ---
+2026-09-20 09:39:28,732 [INFO] Game 3 finished: Result=0-1, Moves=30, Plies=60, White avg time=0.32s, Black avg time=0.58s
+2026-09-20 09:39:28,735 [INFO] Current Match Score: UniChess 0.5 - 2.5 chess_ai
+2026-09-20 09:39:28,735 [INFO] 
+--- Starting Game 4/6: White=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) vs Black=UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 09:39:54,818 [INFO] Game 4 finished: Result=0-1, Moves=31, Plies=62, White avg time=0.64s, Black avg time=0.20s
+2026-09-20 09:39:54,818 [INFO] Current Match Score: UniChess 1.5 - 2.5 chess_ai
+2026-09-20 09:39:54,818 [INFO] 
+--- Starting Game 5/6: White=UniChessTransformer_20m (MCTS 100) vs Black=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) ---
+2026-09-20 09:40:43,767 [INFO] Game 5 finished: Result=0-1, Moves=51, Plies=102, White avg time=0.37s, Black avg time=0.59s
+2026-09-20 09:40:43,797 [INFO] Current Match Score: UniChess 1.5 - 3.5 chess_ai
+2026-09-20 09:40:43,797 [INFO] 
+--- Starting Game 6/6: White=chess_ai_v2.0.0 (CNN+ResVal depth=4 0.6s) vs Black=UniChessTransformer_20m (MCTS 100) ---
+2026-09-20 09:41:40,540 [INFO] Game 6 finished: Result=1/2-1/2, Moves=66, Plies=131, White avg time=0.54s, Black avg time=0.33s
+2026-09-20 09:41:40,540 [INFO] Current Match Score: UniChess 2.0 - 4.0 chess_ai
+2026-09-20 09:41:40,540 [INFO] 
+================ MATCH COMPLETED ================
+2026-09-20 09:41:40,540 [INFO] Final Score: UniChessTransformer 2.0 - 4.0 chess_ai (6 games)
