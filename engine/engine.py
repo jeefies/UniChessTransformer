@@ -1,6 +1,7 @@
 """Transformer inference engine wrapper with batched evaluation, fp16/bf16 acceleration, and search integration."""
 from __future__ import annotations
 
+import logging
 from pathlib import Path
 import random
 import sys
@@ -15,6 +16,8 @@ from core.encoding import encode, orient_move
 from core.moves import move_to_index, move_to_promo_index
 from model.transformer import ChessTransformer, TransformerConfig
 from search.mcts import MCTS, MCTSConfig
+
+logger = logging.getLogger(__name__)
 
 
 class TransformerEngine:
@@ -32,12 +35,15 @@ class TransformerEngine:
         temperature: float = 0.0,
         mcts_sims: int = 0,
         mcts_batch: int = 128,
+        use_cpp_mcts: bool = True,
         seed: int | None = None,
     ):
         self.device = torch.device(device)
         self.precision = precision
         self.temperature = temperature
         self.book_plies = book_plies
+        self.mcts_batch = mcts_batch
+        self.use_cpp_mcts = use_cpp_mcts
         self.rng = random.Random(seed)
         self.np_rng = np.random.default_rng(seed)
 
@@ -99,7 +105,21 @@ class TransformerEngine:
         # MCTS search
         self.mcts_sims = mcts_sims
         self.mcts = None
-        if mcts_sims > 0:
+
+        # C++ MCTS initialization
+        self.cpp_mcts = None
+        if self.use_cpp_mcts:
+            try:
+                from search.cpp import load_cpp_mcts
+                MCTSCpp = load_cpp_mcts()
+                self.cpp_mcts = MCTSCpp()
+                if seed is not None:
+                    self.cpp_mcts.set_seed(seed)
+            except Exception as e:
+                logger.warning(f"Failed to load C++ MCTS, falling back to Python MCTS: {e}")
+                self.cpp_mcts = None
+
+        if mcts_sims > 0 and self.cpp_mcts is None:
             mcts_cfg = MCTSConfig(
                 simulations=mcts_sims,
                 batch_size=mcts_batch,
@@ -127,6 +147,26 @@ class TransformerEngine:
         p_probs = torch.softmax(p_logits.float(), dim=-1).cpu().numpy()
         pr_probs = torch.softmax(pr_logits.float(), dim=-1).cpu().numpy()
         w_probs = torch.softmax(w_logits.float(), dim=-1).cpu().numpy()
+        return p_probs, pr_probs, w_probs
+
+    @torch.no_grad()
+    def evaluate_tensor(
+        self, x: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        """Evaluator callback for C++ MCTS receiving torch.Tensor (B, 19, 8, 8).
+
+        Returns: (policy_probs[B, 4096], promo_probs[B, 4], wdl[B, 3])
+        """
+        x = x.to(self.device)
+        if self.autocast:
+            with torch.autocast(device_type=self.device.type, dtype=self.dtype):
+                p_logits, pr_logits, w_logits = self.model(x)
+        else:
+            p_logits, pr_logits, w_logits = self.model(x)
+
+        p_probs = torch.softmax(p_logits.float(), dim=-1)
+        pr_probs = torch.softmax(pr_logits.float(), dim=-1)
+        w_probs = torch.softmax(w_logits.float(), dim=-1)
         return p_probs, pr_probs, w_probs
 
     @torch.no_grad()
@@ -211,9 +251,28 @@ class TransformerEngine:
     def _from_mcts(self, board: chess.Board) -> chess.Move | None:
         if self.mcts_sims <= 0:
             return None
+
+        if self.cpp_mcts is not None:
+            try:
+                move_str, _ = self.cpp_mcts.search(
+                    board.fen(),
+                    self.evaluate_tensor,
+                    simulations=self.mcts_sims,
+                    batch_size=self.mcts_batch,
+                    temperature=self.temperature,
+                )
+                if move_str:
+                    mv = chess.Move.from_uci(move_str)
+                    if mv in board.legal_moves:
+                        return mv
+            except Exception as e:
+                logger.warning(f"C++ MCTS search failed ({e}), falling back to Python MCTS")
+
+        # Python MCTS fallback
         if self.mcts is None:
             mcts_cfg = MCTSConfig(
                 simulations=self.mcts_sims,
+                batch_size=self.mcts_batch,
                 temperature=self.temperature,
             )
             self.mcts = MCTS(self.evaluate_batch, cfg=mcts_cfg, tablebase=self.tablebase, rng=self.np_rng)

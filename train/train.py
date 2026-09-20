@@ -24,7 +24,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from model.dataset import get_shards, make_loader
 from model.loss import ChessLoss
-from model.transformer import PRESETS, ChessTransformer, TransformerConfig, create_transformer
+from model.transformer import PRESETS, ChessTransformer, StratifiedChessTransformer, TransformerConfig, create_transformer
 
 
 def set_seed(seed: int):
@@ -55,7 +55,8 @@ def parse_args():
     parser.add_argument("--grad-clip", type=float, default=1.0)
     parser.add_argument("--precision", type=str, default="bf16", choices=["bf16", "fp16", "fp32"])
     parser.add_argument("--checkpoint-dir", type=str, default="checkpoints")
-    parser.add_argument("--save-every", type=int, default=5000)
+    parser.add_argument("--save-every", type=int, default=1000)
+    parser.add_argument("--init-from", type=str, default=None, help="Path to base 20M checkpoint to initialize model weights")
     parser.add_argument("--val-every", type=int, default=1000)
     parser.add_argument("--val-steps", type=int, default=50, help="Max batches to evaluate during validation")
     parser.add_argument("--log-every", type=int, default=50)
@@ -174,6 +175,25 @@ def train():
     param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
     print(f"Model: {args.preset} | Parameters: {param_count:,} ({param_count/1e6:.2f}M)")
 
+    # Initialize from base checkpoint if requested and not resuming
+    if args.init_from and not args.resume:
+        init_path = Path(args.init_from)
+        if not init_path.exists():
+            raise FileNotFoundError(f"--init-from checkpoint not found at: {init_path}")
+        print(f"Initializing model from base checkpoint: {init_path}")
+        raw_model = getattr(model, "_orig_mod", model)
+        if isinstance(raw_model, StratifiedChessTransformer):
+            raw_model.load_base_checkpoint(init_path)
+            print("Successfully loaded base checkpoint into all 3 phase experts (opening, middlegame, endgame).")
+        elif isinstance(raw_model, ChessTransformer):
+            ckpt = torch.load(init_path, map_location="cpu", weights_only=False)
+            sd = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
+            clean_sd = {k.removeprefix("_orig_mod."): v for k, v in sd.items()}
+            raw_model.load_state_dict(clean_sd)
+            print("Successfully loaded base checkpoint into ChessTransformer.")
+        else:
+            raise TypeError(f"Unsupported model type for init_from: {type(raw_model)}")
+
     # Optimizer & Criterion
     fused = (device.type == "cuda" and hasattr(torch.optim.AdamW, "_step_supports_fused"))
     try:
@@ -186,7 +206,12 @@ def train():
         model = torch.compile(model)
     criterion = ChessLoss()
 
-    total_steps = (len(train_loader) // args.grad_accum_steps) * args.epochs
+    steps_per_epoch = max(1, len(train_loader) // args.grad_accum_steps)
+    if args.max_steps:
+        needed_epochs = math.ceil(args.max_steps / steps_per_epoch)
+        if needed_epochs > args.epochs:
+            args.epochs = needed_epochs
+    total_steps = steps_per_epoch * args.epochs
     if args.max_steps:
         total_steps = min(total_steps, args.max_steps)
 
@@ -212,24 +237,31 @@ def train():
 
     if args.resume:
         resume_path = Path(args.resume)
-        if resume_path.exists():
-            print(f"Resuming from checkpoint: {resume_path}")
-            ckpt = torch.load(resume_path, map_location=device, weights_only=False)
-            model.load_state_dict(ckpt["model"])
-            if "optimizer" in ckpt:
-                optimizer.load_state_dict(ckpt["optimizer"])
-                if args.reset_lr:
-                    for g in optimizer.param_groups:
-                        g["lr"] = args.lr
-            if "scheduler" in ckpt and not args.reset_lr:
-                scheduler.load_state_dict(ckpt["scheduler"])
-            if scaler and "scaler" in ckpt and ckpt["scaler"] is not None:
-                scaler.load_state_dict(ckpt["scaler"])
-            start_step = ckpt.get("step", 0)
-            start_epoch = ckpt.get("epoch", 0)
-            best_val_loss = ckpt.get("best_val_loss", float("inf"))
-            best_p1_acc = ckpt.get("best_p1_acc", 0.0)
-            print(f"Resumed at step {start_step}, epoch {start_epoch}, best_val_loss: {best_val_loss:.4f}")
+        if not resume_path.exists():
+            raise FileNotFoundError(f"Resume checkpoint not found: {resume_path}")
+        print(f"Resuming from checkpoint: {resume_path}")
+        ckpt = torch.load(resume_path, map_location=device, weights_only=False)
+        raw_model = getattr(model, "_orig_mod", model)
+        sd = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
+        clean_sd = {k.removeprefix("_orig_mod."): v for k, v in sd.items()}
+        raw_model.load_state_dict(clean_sd)
+        if "optimizer" in ckpt:
+            optimizer.load_state_dict(ckpt["optimizer"])
+            if args.reset_lr:
+                for g in optimizer.param_groups:
+                    g["lr"] = args.lr
+        if "scheduler" in ckpt and not args.reset_lr:
+            scheduler.load_state_dict(ckpt["scheduler"])
+        elif not args.reset_lr and ckpt.get("step", 0) > 0:
+            for _ in range(ckpt.get("step", 0)):
+                scheduler.step()
+        if scaler and "scaler" in ckpt and ckpt["scaler"] is not None:
+            scaler.load_state_dict(ckpt["scaler"])
+        start_step = ckpt.get("step", 0)
+        start_epoch = start_step // steps_per_epoch if steps_per_epoch > 0 else ckpt.get("epoch", 0)
+        best_val_loss = ckpt.get("best_val_loss", float("inf"))
+        best_p1_acc = ckpt.get("best_p1_acc", 0.0)
+        print(f"Resumed at step {start_step}, epoch {start_epoch}, best_val_loss: {best_val_loss:.4f}")
 
     global_step = start_step
     print("Beginning training...")
@@ -253,12 +285,21 @@ def train():
 
     def get_cfg_dict():
         raw = getattr(model, "_orig_mod", model)
-        if hasattr(raw, "cfg") and hasattr(raw.cfg, "to_dict"):
-            return raw.cfg.to_dict()
+        if hasattr(raw, "cfg"):
+            if hasattr(raw.cfg, "__dict__"):
+                return raw.cfg.__dict__
+            if hasattr(raw.cfg, "to_dict"):
+                return raw.cfg.to_dict()
         return {}
+
+    batches_to_skip = max(0, (start_step - start_epoch * steps_per_epoch) * args.grad_accum_steps)
+    if batches_to_skip > 0:
+        print(f"Fast-forwarding {batches_to_skip} batches to resume at step {start_step}...")
 
     for epoch in range(start_epoch, args.epochs):
         for batch_idx, (x, p, pr, w) in enumerate(train_loader):
+            if epoch == start_epoch and batch_idx < batches_to_skip:
+                continue
             x = x.to(device, non_blocking=True)
             p = p.to(device, non_blocking=True)
             pr = pr.to(device, non_blocking=True)
@@ -391,6 +432,9 @@ def train():
                             "epoch": epoch,
                             "preset": args.preset,
                             "model": get_model_state_dict(),
+                            "optimizer": optimizer.state_dict(),
+                            "scheduler": scheduler.state_dict(),
+                            "scaler": scaler.state_dict() if scaler else None,
                             "cfg": get_cfg_dict(),
                             "best_val_loss": best_val_loss,
                             "best_p1_acc": val_metrics.get("val_policy_top1_acc", 0.0),
@@ -403,6 +447,7 @@ def train():
                 # Periodic saving
                 if global_step % args.save_every == 0:
                     step_ckpt_path = ckpt_dir / f"step_{global_step}.pt"
+                    latest_ckpt_path = ckpt_dir / "latest_checkpoint.pt"
                     save_dict = {
                         "step": global_step,
                         "epoch": epoch,
@@ -413,9 +458,11 @@ def train():
                         "scaler": scaler.state_dict() if scaler else None,
                         "cfg": get_cfg_dict(),
                         "best_val_loss": best_val_loss,
+                        "best_p1_acc": best_p1_acc,
                     }
                     torch.save(save_dict, step_ckpt_path)
-                    print(f"Saved checkpoint to {step_ckpt_path}")
+                    torch.save(save_dict, latest_ckpt_path)
+                    print(f"Saved checkpoint to {step_ckpt_path} and {latest_ckpt_path}")
 
                 if args.max_steps and global_step >= args.max_steps:
                     break
@@ -425,15 +472,22 @@ def train():
 
     # Save final model
     final_path = ckpt_dir / "final_model.pt"
-    torch.save({
+    latest_ckpt_path = ckpt_dir / "latest_checkpoint.pt"
+    final_dict = {
         "step": global_step,
-        "epoch": args.epochs,
+        "epoch": min(epoch, args.epochs - 1) if "epoch" in locals() else args.epochs,
         "preset": args.preset,
         "model": get_model_state_dict(),
+        "optimizer": optimizer.state_dict(),
+        "scheduler": scheduler.state_dict(),
+        "scaler": scaler.state_dict() if scaler else None,
         "cfg": get_cfg_dict(),
         "best_val_loss": best_val_loss,
-    }, final_path)
-    print(f"Training completed at step {global_step}. Final model saved to {final_path}")
+        "best_p1_acc": best_p1_acc,
+    }
+    torch.save(final_dict, final_path)
+    torch.save(final_dict, latest_ckpt_path)
+    print(f"Training completed at step {global_step}. Final model saved to {final_path} and {latest_ckpt_path}")
 
 
 if __name__ == "__main__":

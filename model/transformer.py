@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass
 import math
+from pathlib import Path
 from typing import Literal
 
 import chess
@@ -298,6 +299,29 @@ class StratifiedChessTransformer(nn.Module):
         self.experts = nn.ModuleList([self.opening, self.middlegame, self.endgame])
         self.cfg = self.opening.cfg
 
+    def load_base_checkpoint(self, base_ckpt_path: str | Path) -> StratifiedChessTransformer:
+        """Loads a single 20M checkpoint and broadcasts parameters into opening, middlegame, and endgame experts."""
+        path = Path(base_ckpt_path)
+        if not path.exists():
+            raise FileNotFoundError(f"Base checkpoint not found at: {path}")
+
+        ckpt = torch.load(path, map_location="cpu", weights_only=False)
+        state_dict = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
+
+        clean_state_dict = {
+            k.removeprefix("_orig_mod."): v
+            for k, v in state_dict.items()
+        }
+
+        has_expert_prefix = any(k.startswith(("opening.", "middlegame.", "endgame.", "experts.")) for k in clean_state_dict)
+        if has_expert_prefix:
+            self.load_state_dict(clean_state_dict)
+        else:
+            for expert in self.experts:
+                expert.load_state_dict(clean_state_dict)
+
+        return self
+
     @staticmethod
     def route_index(board: chess.Board) -> int:
         piece_count = len(board.piece_map())
@@ -356,9 +380,9 @@ class StratifiedChessTransformer(nn.Module):
             expert_idx = routes[0]
             return self.experts[expert_idx](x)
 
-        p_out = torch.empty(B, 4096, device=x.device, dtype=x.dtype)
-        pr_out = torch.empty(B, 4, device=x.device, dtype=x.dtype)
-        v_out = torch.empty(B, 3, device=x.device, dtype=x.dtype)
+        p_out = None
+        pr_out = None
+        v_out = None
 
         for phase in range(3):
             idxs = [i for i, r in enumerate(routes) if r == phase]
@@ -366,6 +390,10 @@ class StratifiedChessTransformer(nn.Module):
                 continue
             sub_x = x[idxs]
             sub_p, sub_pr, sub_v = self.experts[phase](sub_x)
+            if p_out is None:
+                p_out = torch.empty(B, 4096, device=x.device, dtype=sub_p.dtype)
+                pr_out = torch.empty(B, 4, device=x.device, dtype=sub_pr.dtype)
+                v_out = torch.empty(B, 3, device=x.device, dtype=sub_v.dtype)
             p_out[idxs] = sub_p
             pr_out[idxs] = sub_pr
             v_out[idxs] = sub_v
@@ -475,7 +503,16 @@ PRESETS = {
 }
 
 
-def create_transformer(preset_name: str = "transformer_small", **kwargs) -> nn.Module:
+def create_transformer(preset_name: str = "transformer_small", init_from: str | Path | None = None, **kwargs) -> nn.Module:
     if preset_name not in PRESETS:
         raise ValueError(f"Unknown preset: {preset_name}. Available: {list(PRESETS.keys())}")
-    return PRESETS[preset_name](**kwargs)
+    model = PRESETS[preset_name](**kwargs)
+    if init_from is not None:
+        if isinstance(model, StratifiedChessTransformer):
+            model.load_base_checkpoint(init_from)
+        elif hasattr(model, "load_state_dict"):
+            ckpt = torch.load(init_from, map_location="cpu", weights_only=False)
+            sd = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
+            clean_sd = {k.removeprefix("_orig_mod."): v for k, v in sd.items()}
+            model.load_state_dict(clean_sd)
+    return model

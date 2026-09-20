@@ -160,6 +160,15 @@ def test_stratified_transformer():
     assert pr1.shape == (1, 4)
     assert v1.shape == (1, 3)
 
+    # Test load_base_checkpoint
+    base_ckpt = PROJECT_ROOT / "runs" / "transformer_20m" / "best_model.pt"
+    if base_ckpt.exists():
+        model.load_base_checkpoint(base_ckpt)
+        for p1, p2 in zip(model.opening.parameters(), model.middlegame.parameters()):
+            assert torch.equal(p1, p2)
+        for p1, p3 in zip(model.opening.parameters(), model.endgame.parameters()):
+            assert torch.equal(p1, p3)
+
 
 def test_parallel_mcts():
     board = chess.Board()
@@ -324,6 +333,27 @@ def test_uci_protocol():
     assert eng is not None
 
 
+def test_cpp_mcts():
+    import chess
+    import torch
+    from search.cpp import load_cpp_mcts
+
+    MCTSCpp = load_cpp_mcts()
+    engine = MCTSCpp()
+
+    def dummy_eval(tensor):
+        b = tensor.shape[0]
+        p = torch.zeros(b, 4096)
+        pr = torch.zeros(b, 4)
+        wdl = torch.tensor([[0.3, 0.4, 0.3]], dtype=torch.float32).repeat(b, 1)
+        return torch.softmax(p, dim=-1), torch.softmax(pr, dim=-1), wdl
+
+    fen = "rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1"
+    move, metrics = engine.search(fen, dummy_eval, simulations=100, batch_size=16)
+    assert move in [m.uci() for m in chess.Board(fen).legal_moves], f"Illegal move: {move}"
+    assert metrics["visits"] == 100, f"Expected 100 visits, got {metrics['visits']}"
+
+
 if __name__ == "__main__":
     tests = [
         test_encoding,
@@ -334,6 +364,7 @@ if __name__ == "__main__":
         test_transformer_forward_both_shapes,
         test_dataset_and_loss,
         test_mcts_search,
+        test_cpp_mcts,
         test_engine_play,
         test_arena_stats,
         test_puzzle_bench,

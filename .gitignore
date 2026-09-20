@@ -32,3 +32,9 @@ ENV/
 .DS_Store
 .vscode/
 .idea/
+
+# AI 会话导出（隐私，禁入公网仓库）
+session-*.md
+
+# 新增训练/对局日志（既有已跟踪日志保留为历史记录）
+logs/*.log

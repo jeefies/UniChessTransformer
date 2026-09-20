@@ -160,22 +160,39 @@ def evaluate_puzzles(
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Tactical puzzle solver benchmark")
-    parser.add_argument("--model", type=str, default="transformer_small", help="Checkpoint path or preset name")
+    parser.add_argument("--model", "--ckpt", "--weights", dest="model", type=str, default="transformer_small", help="Checkpoint path or preset name")
     parser.add_argument("--puzzles", type=str, default=None, help="Optional path to puzzle CSV/JSON/EPD file")
     parser.add_argument("--max-puzzles", type=int, default=None)
     parser.add_argument("--mcts", action="store_true", help="Enable MCTS during puzzle search")
+    parser.add_argument("--no-cpp-mcts", action="store_true", help="Disable C++ MCTS acceleration")
     parser.add_argument("--sims", type=int, default=200, help="MCTS simulations if enabled")
     parser.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     parser.add_argument("--precision", type=str, default="fp16")
     args = parser.parse_args()
 
+    # Automatically enable MCTS if sims is provided and --mcts not explicitly passed
+    use_mcts = args.mcts or (args.sims > 0 and "--sims" in sys.argv)
+    use_cpp_mcts = not args.no_cpp_mcts
+
     # Load engine
     if Path(args.model).exists():
-        engine = TransformerEngine(args.model, device=args.device, precision=args.precision, mcts_sims=args.sims if args.mcts else 0)
+        engine = TransformerEngine(
+            args.model,
+            device=args.device,
+            precision=args.precision,
+            mcts_sims=args.sims if use_mcts else 0,
+            use_cpp_mcts=use_cpp_mcts,
+        )
     else:
         from model.transformer import create_transformer
         net = create_transformer(args.model)
-        engine = TransformerEngine(net, device=args.device, precision=args.precision, mcts_sims=args.sims if args.mcts else 0)
+        engine = TransformerEngine(
+            net,
+            device=args.device,
+            precision=args.precision,
+            mcts_sims=args.sims if use_mcts else 0,
+            use_cpp_mcts=use_cpp_mcts,
+        )
 
     if args.puzzles:
         puzzle_list = load_puzzles_from_file(args.puzzles, max_puzzles=args.max_puzzles)
@@ -183,4 +200,4 @@ if __name__ == "__main__":
         print("No puzzle file specified, using built-in test suite.")
         puzzle_list = BUILTIN_PUZZLES[:args.max_puzzles] if args.max_puzzles else BUILTIN_PUZZLES
 
-    summary = evaluate_puzzles(engine, puzzle_list, use_mcts=args.mcts, mcts_sims=args.sims)
+    summary = evaluate_puzzles(engine, puzzle_list, use_mcts=use_mcts, mcts_sims=args.sims)
