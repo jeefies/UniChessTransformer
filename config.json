@@ -1,0 +1,11 @@
+{
+  "max_mcts": {
+    "ckpt": "/home/jeefy/UniChess/Transformer/runs/transformer_20m/best_model.pt",
+    "mcts_sims": 800,
+    "mcts_batch": 64,
+    "device": "cuda",
+    "precision": "fp16",
+    "syzygy_path": "/home/jeefy/UniChess/data/raw/syzygy345",
+    "description": "UniChess-Transformer 20M (Max MCTS 800)"
+  }
+}
