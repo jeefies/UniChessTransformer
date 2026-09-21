@@ -323,3 +323,47 @@ To support side-by-side human play and evaluation against both neural network ar
   - Initiated with `engine: "transformer"`. Sims locked to 800.
   - Responded to `1. e4` with `1... e5` (`source: "mcts"`, latency 654.0 ms, `sims: 800`).
   - Tested White opening move generation: generated `1. d4` in 767.4 ms with 800 MCTS simulations.
+
+---
+
+## 11. Stratified 20M Full-Scale Training, C++ MCTS Integration & Verification
+
+### 1. Stratified 20M Full-Scale Training
+- **Architecture**: `StratifiedChessTransformer` with 3 specialized phase experts (~20M parameters each) dispatched dynamically by game phase:
+  - Phase 0 (Opening): piece count >= 24 or ply <= 20
+  - Phase 1 (Middlegame): 12 < piece count < 24
+  - Phase 2 (Endgame): piece count <= 12
+- **Training Scale**: 246,197 steps (~252M positions consumed).
+- **Validation Metrics (Step 246,000)**:
+  - **Policy Top-1 Accuracy**: 46.16%
+  - **Policy Top-5 Accuracy**: 81.37%
+  - **WDL Accuracy**: 85.52%
+  - **Q-MSE**: 0.0309
+  - **Val Loss**: 2.6989 (Policy: 1.7856, WDL: 0.8848)
+- **Checkpoints**: Saved to `runs/stratified_20m/best_model.pt` and `runs/stratified_20m/final_model.pt`.
+
+### 2. C++ MCTS Engine Integration & Verification
+- **Implementation**: Custom PyBind11 C++ acceleration core (`search/cpp/`) featuring:
+  - Custom bitboard move generator and legal move parity validation.
+  - 19-plane neural input feature encoding in native C++.
+  - Batched GPU evaluation bridge with lock-free tree expansions.
+- **Verification Suite (`tests/test_cpp_mcts.py`)**:
+  - Full Perft pass on standard positions (Startpos depth 1-4, Kiwipete depth 1-3, Positions 3 & 4).
+  - 50 diverse positions verified for move legality and 19-plane parity.
+  - Terminal states (checkmate, stalemate, single-legal-move) correctly handled.
+  - Memory and stability stress test completed (100 sequential searches, 0 leaks/crashes).
+- **Inference Speed**: ~12.1 ms/move average latency (~22x speedup compared to pure Python MCTS search pipeline).
+
+### 3. Head-to-Head Evaluation vs Baseline Engine
+- **Match Setup**: 20-game head-to-head match against `chess_ai v2.0.0` (CNN + ResVal depth=4, 0.25s search budget). UniChess ran on C++ MCTS with 100 simulations per move.
+- **Match Result**:
+  - **Final Score**: **18.5 - 1.5** (**92.5% score rate**)
+  - **Record**: 17 Wins, 3 Draws, 0 Losses (Undefeated)
+  - **Elo Differential**: **+436.4 Elo** (+- 289.1 at 95% CI)
+  - **Terminations**: 17 checkmates, 2 threefold repetitions, 1 stalemate.
+  - **Mean Move Latency**: UniChess averaged 12.1 ms per move vs 268.3 ms for baseline.
+
+### 4. Web Service Deployment Update
+- **Configuration**: Updated engine configuration (`config.json` / `Server/models/T/config.json`) to load `/home/jeefy/UniChess/Transformer/runs/stratified_20m/best_model.pt`.
+- **Preset**: Configured `max_mcts` tier with 800 MCTS simulations, batch size 64, fp16 precision on CUDA.
+- **Service Verification**: Verified systemd user service `unichess-server` reload and operational status.

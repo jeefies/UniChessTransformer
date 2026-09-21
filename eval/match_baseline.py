@@ -264,7 +264,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--ckpt", type=str, default="runs/transformer_20m/best_model.pt", help="Path to UniChess checkpoint")
     parser.add_argument("--games", type=int, default=100, help="Number of games to play")
-    parser.add_argument("--unichess-sims", type=int, default=100, help="UniChess MCTS sims")
+    parser.add_argument("--unichess-sims", "--sims", type=int, default=100, help="UniChess MCTS sims")
     parser.add_argument("--baseline-seconds", type=float, default=0.25, help="Baseline search budget in seconds")
     parser.add_argument("--baseline-depth", type=int, default=4, help="Baseline search depth")
     parser.add_argument("--baseline-device", type=str, default="cpu", help="Device for baseline model")
