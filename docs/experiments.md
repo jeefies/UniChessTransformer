@@ -367,3 +367,47 @@ To support side-by-side human play and evaluation against both neural network ar
 - **Configuration**: Updated engine configuration (`config.json` / `Server/models/T/config.json`) to load `/home/jeefy/UniChess/Transformer/runs/stratified_20m/best_model.pt`.
 - **Preset**: Configured `max_mcts` tier with 800 MCTS simulations, batch size 64, fp16 precision on CUDA.
 - **Service Verification**: Verified systemd user service `unichess-server` reload and operational status.
+
+---
+
+## 12. Curriculum Learning (Middlegame & Endgame), C++ MCTS Leaf-Level Syzygy Integration, and Championship Match vs Model R
+
+### 1. Curriculum Learning Fine-Tuning
+- **Phase Curriculum Strategy**:
+  - Fine-tuned the phase-stratified 20M experts on targeted positional subsets from 64 evaluation shards (`/home/jeefy/UniChess/data/shards_evals`).
+  - **Difficulty Scoring & Sequencing**: Positions scored in 64k chunks by composite difficulty $\mathcal{L}_{\text{diff}} = \mathcal{L}_{\text{policy}} + \lambda \mathcal{L}_{\text{wdl}}$, sorted from easiest to hardest, and trained with cosine learning rate scheduling ($2 \times 10^{-4} \to 1 \times 10^{-5}$).
+  - **Endgame Curriculum**: Optimized `endgame` expert (piece count $\le 12$) over 10,000 steps (`train/curriculum_endgame.py`), saving to `runs/stratified_curriculum/best_model.pt`.
+  - **Middlegame Curriculum**: Optimized `middlegame` expert ($13 \le \text{piece count} \le 23$) over 10,000 steps (`train/curriculum_middlegame.py`), achieving step 10,000 top-1 policy accuracy of 53.87% and WDL accuracy of 85.66%, saving to `runs/stratified_middlegame_curriculum/best_model.pt`.
+
+### 2. C++ MCTS Leaf-Level Syzygy Integration
+- **Implementation**:
+  - Added native bitboard piece count popcount (`piece_count()`) in `search/cpp/chess_board.hpp`.
+  - Integrated leaf-level Syzygy tablebase probing in `search/cpp/mcts.hpp` and `search/cpp/mcts_pybind.cpp`: when an unexpanded node has $\le 5$ pieces, the engine probes the 3-4-5 piece Syzygy tablebase directly during tree descent.
+  - On tablebase hit, exact WDL game-theoretic values are returned, node is marked terminal without neural network evaluation, and value is backed up along the search path.
+  - Exposed Syzygy path binding and configuration directly to `engine/engine.py` and `engine.py`.
+  - Verified across unit tests in `tests/test_cpp_mcts.py` (Perft, legal move parity, 19-plane encoding, stability stress test).
+
+### 3. Compute-Aligned Head-to-Head Championship Match vs Model R
+- **Match Setup**:
+  - Model T: Stratified Chess Transformer 20M with middlegame curriculum checkpoint (`runs/stratified_middlegame_curriculum/best_model.pt`), C++ MCTS with 2400 simulations, Syzygy 3-4-5 tablebase enabled.
+  - Model R: ResNet 15x192 (`ResNet/runs/stage1/ckpt_00187578.pt`), MCTS with 800 simulations, Syzygy 3-4-5 tablebase enabled.
+  - Opening Selection: 5 balanced opening pairs (Italian Game, Ruy Lopez, Sicilian Defense, French Defense, Queen's Gambit Declined), 10 games total.
+- **Match Results**:
+  - **Final Score**: **Model T 5.5 - 4.5 Model R** (**55.0% score rate**, Model T wins match)
+  - **Record**: 3 Wins (T), 2 Wins (R), 5 Draws
+  - **Average Move Latency**: Model T = **0.34s/move** vs Model R = **0.65s/move** (Model T is ~1.9x faster even with 3x higher simulation budget due to C++ MCTS efficiency).
+  - **Individual Game Details**:
+    - Game 1 (Italian Game): T (White) 1-0 R (Checkmate in 53 moves, 105 plies)
+    - Game 2 (Italian Game): R (White) 0-1 T (Checkmate in 79 moves, 158 plies)
+    - Game 3 (Ruy Lopez): T (White) 1/2-1/2 R (Threefold repetition in 8 moves, 16 plies)
+    - Game 4 (Ruy Lopez): R (White) 0-1 T (Checkmate in 56 moves, 112 plies)
+    - Game 5 (Sicilian): T (White) 1/2-1/2 R (Threefold repetition in 41 moves, 81 plies)
+    - Game 6 (Sicilian): R (White) 1-0 T (Checkmate in 62 moves, 123 plies)
+    - Game 7 (French Defense): T (White) 1/2-1/2 R (Threefold repetition in 32 moves, 63 plies)
+    - Game 8 (French Defense): R (White) 1/2-1/2 T (Threefold repetition in 35 moves, 70 plies)
+    - Game 9 (QGD): T (White) 1/2-1/2 R (Threefold repetition in 29 moves, 58 plies)
+    - Game 10 (QGD): R (White) 1-0 T (Checkmate in 41 moves, 81 plies)
+- **Deployment Status**:
+  - Production `config.json` updated to `runs/stratified_middlegame_curriculum/best_model.pt` with 2400 simulations.
+  - Service `unichess-server` restarted and validated via `/api/models`.
+

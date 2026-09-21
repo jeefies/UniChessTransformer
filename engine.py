@@ -145,6 +145,7 @@ class GameEngine:
                         simulations=self.mcts_sims,
                         batch_size=self.mcts_batch,
                         temperature=0.0,
+                        syzygy_path=self.syzygy_path,
                     )
                     if move_str:
                         candidate = chess.Move.from_uci(move_str)

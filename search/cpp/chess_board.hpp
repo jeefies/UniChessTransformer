@@ -307,6 +307,10 @@ public:
         return colors[WHITE] | colors[BLACK];
     }
 
+    int piece_count() const {
+        return __builtin_popcountll(colors[WHITE] | colors[BLACK]);
+    }
+
     PieceType piece_at(uint8_t sq, Color& color) const {
         uint64_t mask = 1ULL << sq;
         if (colors[WHITE] & mask) {

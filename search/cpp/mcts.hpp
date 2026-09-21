@@ -18,6 +18,8 @@ inline int move_to_index(const Move& m) {
     return (int)m.from_sq * 64 + (int)m.to_sq;
 }
 
+using TablebaseProbeFn = std::function<std::pair<bool, float>(const std::string&)>;
+
 struct MCTSConfig {
     int simulations = 800;
     int batch_size = 64;
@@ -32,6 +34,8 @@ struct MCTSConfig {
     bool claim_draw = false;
     int max_collision = 8;
     int root_min_visits = 1;
+    int tablebase_pieces = 5;
+    TablebaseProbeFn tablebase_probe_fn = nullptr;
 };
 
 struct Node {

@@ -41,6 +41,7 @@ class TransformerEngine:
         self.device = torch.device(device)
         self.precision = precision
         self.temperature = temperature
+        self.syzygy_path = syzygy_path
         self.book_plies = book_plies
         self.mcts_batch = mcts_batch
         self.use_cpp_mcts = use_cpp_mcts
@@ -260,6 +261,7 @@ class TransformerEngine:
                     simulations=self.mcts_sims,
                     batch_size=self.mcts_batch,
                     temperature=self.temperature,
+                    syzygy_path=self.syzygy_path,
                 )
                 if move_str:
                     mv = chess.Move.from_uci(move_str)

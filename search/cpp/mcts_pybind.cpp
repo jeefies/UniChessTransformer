@@ -54,17 +54,47 @@ class MCTSCpp {
 public:
     chess::MCTSConfig cfg;
     std::mt19937 rng;
+    py::object syzygy_obj = py::none();
 
-    MCTSCpp(float c_puct_init = 1.8f, float c_puct_base = 19652.0f, float virtual_loss = 1.0f) {
+    MCTSCpp(
+        float c_puct_init = 1.8f,
+        float c_puct_base = 19652.0f,
+        float virtual_loss = 1.0f,
+        py::object syzygy = py::none()
+    ) {
         cfg.c_puct_init = c_puct_init;
         cfg.c_puct_base = c_puct_base;
         cfg.virtual_loss = virtual_loss;
+        set_syzygy_fn(syzygy);
         std::random_device rd;
         rng.seed(rd());
     }
 
     void set_seed(uint64_t seed) {
         rng.seed(seed);
+    }
+
+    void set_syzygy_fn(py::object syzygy) {
+        syzygy_obj = syzygy;
+    }
+
+    static chess::TablebaseProbeFn resolve_probe_fn(py::object obj) {
+        if (obj.is_none()) return nullptr;
+
+        py::object callable_fn = obj;
+        if (py::hasattr(obj, "probe_wdl") || py::isinstance<py::str>(obj)) {
+            py::object search_cpp = py::module_::import("search.cpp");
+            callable_fn = search_cpp.attr("make_syzygy_probe")(obj);
+        }
+
+        return [callable_fn](const std::string& fen) -> std::pair<bool, float> {
+            try {
+                py::tuple res = callable_fn(fen);
+                return {res[0].cast<bool>(), res[1].cast<float>()};
+            } catch (const std::exception&) {
+                return {false, 0.0f};
+            }
+        };
     }
 
     struct LeafPath {
@@ -86,7 +116,7 @@ public:
         }
     }
 
-    // Search function taking a FEN string and Python evaluator callback
+    // Search function taking a FEN string, Python evaluator callback, and optional Syzygy tablebase probe
     // evaluator: (torch.Tensor [B, 19, 8, 8]) -> tuple[torch.Tensor [B, 4096], torch.Tensor [B, 4], torch.Tensor [B, 3]]
     py::tuple search(
         const std::string& fen,
@@ -94,11 +124,24 @@ public:
         int simulations = 800,
         int batch_size = 64,
         bool add_noise = false,
-        float temperature = 0.0f
+        float temperature = 0.0f,
+        py::object syzygy = py::none(),
+        py::object syzygy_path = py::none()
     ) {
         cfg.simulations = simulations;
         cfg.batch_size = batch_size;
         cfg.temperature = temperature;
+
+        chess::TablebaseProbeFn tb_probe = nullptr;
+        if (!syzygy_path.is_none()) {
+            tb_probe = resolve_probe_fn(syzygy_path);
+        } else if (!syzygy.is_none()) {
+            tb_probe = resolve_probe_fn(syzygy);
+        } else if (!syzygy_obj.is_none()) {
+            tb_probe = resolve_probe_fn(syzygy_obj);
+        } else if (cfg.tablebase_probe_fn) {
+            tb_probe = cfg.tablebase_probe_fn;
+        }
 
         chess::Board root_board(fen);
         auto root = std::make_unique<chess::Node>();
@@ -112,6 +155,7 @@ public:
             py::dict metrics;
             metrics["visits"] = 0;
             metrics["root_value"] = root->terminal_value;
+            metrics["tablebase_hits"] = 0;
             return py::make_tuple("", metrics);
         }
 
@@ -136,6 +180,7 @@ public:
                 py::dict metrics;
                 metrics["visits"] = 0;
                 metrics["root_value"] = 0.0f;
+                metrics["tablebase_hits"] = 0;
                 return py::make_tuple("", metrics);
             }
 
@@ -165,6 +210,7 @@ public:
 
         int network_batches = 1;
         int network_positions = 1;
+        int tablebase_hits = 0;
 
         // Vector to store paths of unexpanded leaves in current batch
         std::vector<LeafPath> leaves;
@@ -225,10 +271,24 @@ public:
                     }
                 }
 
-                if (reached_terminal) {
+                if (reached_terminal || curr->is_terminal) {
                     backup(path, curr->terminal_value);
-                } else if (!curr->expanded && !curr->is_terminal) {
-                    leaves.push_back({curr, curr_board, path});
+                } else if (!curr->expanded) {
+                    bool tb_hit = false;
+                    if (tb_probe && curr_board.piece_count() <= cfg.tablebase_pieces) {
+                        auto [is_tb, exact_val] = tb_probe(curr_board.to_fen());
+                        if (is_tb) {
+                            curr->expanded = true;
+                            curr->is_terminal = true;
+                            curr->terminal_value = exact_val;
+                            backup(path, exact_val);
+                            tablebase_hits++;
+                            tb_hit = true;
+                        }
+                    }
+                    if (!tb_hit) {
+                        leaves.push_back({curr, curr_board, path});
+                    }
                 } else {
                     for (auto& p : path) {
                         p.first->VL[p.second] -= cfg.virtual_loss;
@@ -295,6 +355,7 @@ public:
             py::dict metrics;
             metrics["visits"] = 0;
             metrics["root_value"] = root->terminal_value;
+            metrics["tablebase_hits"] = tablebase_hits;
             return py::make_tuple("", metrics);
         }
 
@@ -336,6 +397,7 @@ public:
         metrics["visits"] = root->sum_N;
         metrics["network_batches"] = network_batches;
         metrics["network_positions"] = network_positions;
+        metrics["tablebase_hits"] = tablebase_hits;
 
         // Policy distribution: move_uci -> visit count
         py::dict visits_dict;
@@ -360,18 +422,25 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
     m.def("perft", &perft, py::arg("fen"), py::arg("depth"), "Compute perft node count");
     m.def("get_legal_moves", &get_legal_moves, py::arg("fen"), "Get legal moves in UCI format");
     m.def("encode_planes", &encode_planes, py::arg("fen"), "Encode board into 19x8x8 tensor");
+    m.def("piece_count", [](const std::string& fen) {
+        return chess::Board(fen).piece_count();
+    }, py::arg("fen"), "Get piece count on board");
 
     py::class_<MCTSCpp>(m, "MCTSCpp")
-        .def(py::init<float, float, float>(),
+        .def(py::init<float, float, float, py::object>(),
              py::arg("c_puct_init") = 1.8f,
              py::arg("c_puct_base") = 19652.0f,
-             py::arg("virtual_loss") = 1.0f)
-        .def("set_seed", &MCTSCpp::set_seed)
+             py::arg("virtual_loss") = 1.0f,
+             py::arg("syzygy") = py::none())
+        .def("set_seed", &MCTSCpp::set_seed, py::arg("seed"))
+        .def("set_syzygy_fn", &MCTSCpp::set_syzygy_fn, py::arg("syzygy"))
         .def("search", &MCTSCpp::search,
              py::arg("fen"),
              py::arg("evaluator"),
              py::arg("simulations") = 800,
              py::arg("batch_size") = 64,
              py::arg("add_noise") = false,
-             py::arg("temperature") = 0.0f);
+             py::arg("temperature") = 0.0f,
+             py::arg("syzygy") = py::none(),
+             py::arg("syzygy_path") = py::none());
 }
