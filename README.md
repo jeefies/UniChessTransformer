@@ -1,8 +1,8 @@
 # UniChessTransformer
 
-**UniChessTransformer** is a state-of-the-art neural chess engine combining Transformer backbones with 2D spatial geometric priors, bilinear square-to-square policy heads, Win-Draw-Loss (WDL) value heads, phase-stratified routing, and high-throughput multi-process batched Monte Carlo Tree Search (MCTS).
+**UniChessTransformer** (Model T) is a state-of-the-art neural chess engine combining Transformer backbones with 2D spatial geometric priors, bilinear square-to-square policy heads, Win-Draw-Loss (WDL) value heads, phase-stratified routing, and high-performance batched Monte Carlo Tree Search (MCTS) accelerated by C++.
 
-UniChessTransformer achieves **84.5% win rate (71 wins, 27 draws, 2 losses, +295 Elo)** against baseline `chess_ai v2.0.0` over a 100-game match under matched time controls.
+UniChessTransformer's flagship model (`runs/stratified_middlegame_curriculum/best_model.pt`) defeated Model R (`chess_ai` / ResNet 15x192) in a 10-game compute-aligned championship match **5.5 - 4.5** at 2400 MCTS simulations, running at **0.34s/move** (~1.9x faster than Model R's 0.65s/move).
 
 ---
 
@@ -14,24 +14,30 @@ UniChessTransformer achieves **84.5% win rate (71 wins, 27 draws, 2 losses, +295
   - **Bilinear Square-to-Square Policy Head**: Projects square representations into origin queries ($Q \in \mathbb{R}^{64 \times 64}$) and destination keys ($K \in \mathbb{R}^{64 \times 64}$), enforcing chessboard geometric constraints while avoiding parameter explosion.
   - **WDL Value Head**: Directly predicts Win, Draw, and Loss probabilities via global `[CLS]` token representation.
 
-- **Model Hierarchy & Tiers**:
-  - **`transformer_20m`** (~20.3M params, 11 layers, $d=384$, 12 heads): Primary competitive engine, delivering fast inference and grandmaster-level positional evaluation.
-  - **`transformer_50m`** (~49.7M params, 17 layers, $d=512$, 16 heads): Flagship deep model for deep tactical computation.
-  - **`stratified_20m`** (~60.8M params, 3 $\times$ 11 layers): Dynamic phase-stratified routing (Opening, Middlegame, Endgame) dispatching positions to specialized phase experts.
-  - Lightweight presets (`transformer_tiny`, `transformer_small`, `transformer_medium`) for fast CPU inference and experimentation.
+- **Model Hierarchy & Phase-Stratified Routing**:
+  - **`stratified_20m`** (~60.8M params total, 3 $\times$ 11 layers): Dynamic phase-stratified routing dispatching positions across 3 specialized ~20M expert networks:
+    - **Opening Expert**: `piece_count >= 24` or `ply <= 20`
+    - **Middlegame Expert**: `12 < piece_count < 24` (further refined with curriculum fine-tuning)
+    - **Endgame Expert**: `piece_count <= 12` (curriculum fine-tuned with Syzygy guidance)
+  - **`transformer_20m`** (~20.3M params, 11 layers, $d=384$, 12 heads): Fast inference single-backbone model.
+  - **`transformer_50m`** (~49.7M params, 17 layers, $d=512$, 16 heads): Deep monolithic transformer tier.
+  - Lightweight presets (`transformer_tiny`, `transformer_small`, `transformer_medium`, `transformer_large`).
 
-- **High-Performance Parallel MCTS**:
-  - Multi-process lock-free tree search with leaf batched evaluation on GPU.
-  - Up to **8,820 simulations/second** (16 CPU workers, batch size 64 on RTX 5070 Ti).
-  - Virtual loss, PUCT formula with exploration tuning, Dirichlet root noise, and Syzygy endgame tablebase probing.
+- **C++ Accelerated MCTS Engine (`search/cpp/`)**:
+  - High-performance PyBind11 C++ MCTS extension delivering **6,155+ sims/sec** batched tree search.
+  - **Native Leaf-Level Syzygy Probing**: Traversal directly probes 3-4-5 piece Syzygy tablebases at leaf nodes, returning exact game-theoretic values without GPU inference.
+  - **Pure Python Fallback**: Seamless fallback to batched Python MCTS (`search/mcts.py`) if the C++ extension is uncompiled.
+  - **Multi-Process Parallel MCTS (`search/parallel_mcts.py`)**: Lock-free worker architecture delivering up to **8,820 sims/sec** (16 workers, batch size 64).
 
-- **Training Pipeline**:
-  - Distillation from Stockfish MultiPV evaluations with custom joint loss (Softmax Cross-Entropy policy loss + WDL Cross-Entropy / MSE value loss).
-  - Vectorized binary shard decoding with PyTorch bfloat16 AMP mixed precision and fused AdamW.
+- **Training & Curriculum Learning**:
+  - Distillation from Stockfish evaluations with joint policy softmax cross-entropy and WDL loss.
+  - Phase-stratified curriculum training on 64 binary shards (`/home/jeefy/UniChess/data/shards_evals`).
+  - Current best model: `runs/stratified_middlegame_curriculum/best_model.pt`.
 
-- **Standards & Deployment**:
-  - Full UCI protocol compliance (`uci.py`) compatible with standard GUIs (Arena, Cutechess, Banksia, Lichess bots).
-  - Integrated into FastAPI dual-engine web service with human-vs-AI board interface.
+- **Standards & Server Integration**:
+  - Full UCI protocol compliance (`uci.py`) supporting standard chess GUIs.
+  - Server integration via symlink: `/home/jeefy/UniChess/Server/models/T -> /home/jeefy/UniChess/Transformer`.
+  - Production service managed under systemd user service `unichess-server`.
 
 ---
 
@@ -44,11 +50,11 @@ UniChessTransformer achieves **84.5% win rate (71 wins, 27 draws, 2 losses, +295
                                     │
                     64 Square Tokens + [CLS] Token
                                     │
-               + Rank / File Embeddings & 2D Rel Bias
+                + Rank / File Embeddings & 2D Rel Bias
                                     │
-                 Transformer Encoder Layers (Pre-LN)
-               - FlashAttention / SDPA with Pairwise Bias
-               - SwiGLU / GeLU Feed-Forward MLP
+                  Transformer Encoder Layers (Pre-LN)
+                - FlashAttention / SDPA with Pairwise Bias
+                - SwiGLU / GeLU Feed-Forward MLP
                                     │
             ┌───────────────────────┴───────────────────────┐
             │                                               │
@@ -60,28 +66,35 @@ UniChessTransformer achieves **84.5% win rate (71 wins, 27 draws, 2 losses, +295
 
 ---
 
-## Benchmark & Match Results
+## Head-to-Head Benchmark Results
 
-### 100-Game Match vs `chess_ai v2.0.0`
-Tested over 100 games across 25 diverse opening systems (1.e4, 1.d4, 1.c4, 1.Nf3):
+### 10-Game Championship Match vs Model R (`chess_ai` / ResNet 15x192)
+Evaluated across 5 balanced opening pairs (Italian, Ruy Lopez, Sicilian, French, Queen's Gambit Declined):
 
-| Engine | Score | Wins | Draws | Losses | Win Rate | Elo Diff |
-| :--- | :---: | :---: | :---: | :---: | :---: | :---: |
-| **UniChessTransformer (20M)** | **84.5 / 100** | **71** | **27** | **2** | **84.5%** | **+294.6 ± 94.1** |
-| `chess_ai v2.0.0` (CNN + Negamax) | 15.5 / 100 | 2 | 27 | 71 | 15.5% | Reference |
+| Matchup | Model T (Stratified 20M Curriculum) | Model R (ResNet 15x192) |
+| :--- | :---: | :---: |
+| **Search Engine** | **C++ MCTS + Leaf Syzygy (2400 sims)** | Python MCTS + Syzygy (800 sims) |
+| **Final Score** | **5.5 / 10 (55.0%)** | 4.5 / 10 (45.0%) |
+| **Game Record** | **3 Wins, 5 Draws, 2 Losses** | 2 Wins, 5 Draws, 3 Losses |
+| **Average Move Latency** | **0.34s / move** (~1.9x faster) | 0.65s / move |
 
-- **Decisive Finishes**: 73% of games concluded in checkmate.
-- **Robustness**: Only 2 losses across 100 competitive games under matched clock conditions.
+### Match vs Baseline Engine (`chess_ai v2.0.0` CNN + Negamax)
+- **Score**: **18.5 / 20 (92.5%)** undefeated (17 wins, 3 draws, 0 losses, +436.4 Elo).
+- **Latency**: 12.1 ms/move with C++ MCTS (100 sims) vs 268.3 ms for baseline.
 
-### Parallel MCTS Throughput (RTX 5070 Ti + 20 CPU Cores)
+---
 
-| Workers | Batch 64 | Batch 128 | Batch 256 | Scaling vs 1 Worker |
-| :---: | :---: | :---: | :---: | :---: |
-| **1 Worker** | 283.4 sims/s | 285.4 sims/s | 276.3 sims/s | 1.0x |
-| **4 Workers** | 2,971.9 sims/s | 3,095.5 sims/s | 2,806.3 sims/s | 10.8x |
-| **8 Workers** | 5,846.5 sims/s | 5,139.4 sims/s | 5,032.3 sims/s | 20.6x |
-| **16 Workers** | **8,820.2 sims/s** | 6,986.7 sims/s | 6,738.4 sims/s | **31.1x** |
-| **32 Workers** | 6,453.5 sims/s | 5,778.6 sims/s | 5,965.5 sims/s | 22.8x |
+## Verification & Test Suite
+
+The test suite covers full correctness and stability across Python and C++ components:
+
+```bash
+# Run full unit tests (13 test functions)
+/home/jeefy/miniconda3/envs/unichess/bin/python tests/test_all.py
+
+# Run dedicated C++ MCTS test suite (Perft, legal moves, 19-plane parity, stress test)
+/home/jeefy/miniconda3/envs/unichess/bin/python tests/test_cpp_mcts.py
+```
 
 ---
 
@@ -97,24 +110,29 @@ UniChessTransformer/
 │   ├── dataset.py          # Vectorized binary shard dataset & dataloaders
 │   └── loss.py             # Multi-task policy distillation + WDL loss
 ├── search/                 # Search algorithms
-│   ├── mcts.py             # PUCT MCTS with virtual loss & Dirichlet noise
+│   ├── cpp/                # C++ MCTS implementation with leaf Syzygy probing (PyBind11)
+│   │   ├── chess_board.hpp # Fast C++ bitboard move generator & 19-plane encoder
+│   │   ├── mcts.hpp        # Batched C++ tree search engine & leaf tablebase hook
+│   │   └── mcts_pybind.cpp # PyBind11 bindings for Python integration
+│   ├── mcts.py             # Python PUCT MCTS with virtual loss & Dirichlet noise (fallback)
 │   └── parallel_mcts.py    # Multi-process batched GPU evaluation search engine
 ├── engine/                 # UCI & high-level engine wrappers
-│   └── engine.py           # Unified engine interface with tablebase support
-├── train/                  # Training pipeline
-│   └── train.py            # Distributed/AMP training script
+│   └── engine.py           # Unified engine interface with C++ MCTS & tablebase support
+├── train/                  # Training pipeline & curriculum fine-tuning
+│   ├── train.py            # Distributed/AMP training script
+│   ├── curriculum_middlegame.py # Middlegame curriculum fine-tuning
+│   └── curriculum_endgame.py    # Endgame curriculum fine-tuning
 ├── eval/                   # Benchmark and evaluation scripts
 │   ├── arena.py            # Automated round-robin & head-to-head match runner
 │   ├── match_baseline.py   # Baseline match harness against chess_ai
 │   └── puzzle_bench.py     # Lichess/curated tactical puzzle suite evaluator
 ├── tools/                  # Analysis & hyperparameter optimization
 │   └── hyperparam_search.py# Parallel Bayesian/Grid search for MCTS parameters
-├── tests/                  # Unit tests for encoding, models, and search
-│   └── test_all.py         # Full test suite
-├── docs/                   # Detailed specifications & experiment logs
-│   ├── architecture.md     # Mathematical & structural design specification
-│   └── experiments.md      # Comprehensive experimental records & metrics
+├── tests/                  # Test suites
+│   ├── test_all.py         # Full unit test suite (13 tests)
+│   └── test_cpp_mcts.py    # Dedicated C++ MCTS verification suite
 ├── uci.py                  # Universal Chess Interface (UCI) entrypoint
+├── config.json             # Engine configuration for deployment
 └── README.md
 ```
 
@@ -122,49 +140,21 @@ UniChessTransformer/
 
 ## Quick Start
 
-### Installation
-
-```bash
-git clone git@github.com:jeefies/UniChessTransformer.git
-cd UniChessTransformer
-
-# Create and activate environment
-conda create -n unichess python=3.12 -y
-conda activate unichess
-
-# Install PyTorch with CUDA support and dependencies
-pip install torch torchvision --index-url https://download.pytorch.org/whl/cu124
-pip install python-chess numpy
-```
-
 ### Running the UCI Engine
-
 ```bash
-python uci.py --weights path/to/model.pt --preset transformer_20m --sims 800 --device cuda
+/home/jeefy/miniconda3/envs/unichess/bin/python uci.py \
+  --ckpt runs/stratified_middlegame_curriculum/best_model.pt \
+  --mcts-sims 2400 \
+  --device cuda
 ```
 
-### Running Tests
-
+### Running Server Service
 ```bash
-python -m unittest discover -s tests
-```
+# Verify systemd service status
+systemctl --user status unichess-server
 
-### Training
-
-```bash
-python -m train.train \
-    --preset transformer_20m \
-    --data-dir /path/to/binary_shards \
-    --batch-size 512 \
-    --lr 1e-3 \
-    --amp bf16 \
-    --output-dir runs/transformer_20m
-```
-
-### Running Tactical Benchmark
-
-```bash
-python -m eval.puzzle_bench --weights path/to/model.pt --sims 100
+# Restart server
+systemctl --user restart unichess-server
 ```
 
 ---
