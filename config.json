@@ -1,11 +1,11 @@
 {
   "max_mcts": {
-    "ckpt": "/home/jeefy/UniChess/Transformer/runs/stratified_middlegame_curriculum/best_model.pt",
+    "ckpt": "/home/jeefy/UniChess/Transformer/runs/stratified_p4_selfplay_corrected/best_model.pt",
     "mcts_sims": 2400,
     "mcts_batch": 64,
     "device": "cuda",
     "precision": "fp16",
     "syzygy_path": "/home/jeefy/UniChess/data/raw/syzygy345",
-    "description": "UniChess-Stratified Curriculum 20M (Max MCTS 2400)"
+    "description": "UniChess-Stratified P4 Self-Play 20M (Max MCTS 2400, 10-0 vs Model R)"
   }
 }

@@ -1,16 +1,56 @@
 # UniChessTransformer Experimental Records
 
+> Experimental log, organized chronologically. Architecture specifications live in
+> [`architecture.md`](architecture.md); the latest match outcome is summarized in `README.md`.
+>
+> **Contents**
+> 1. [Stage Overview & Model Parameter Verification](#1-stage-overview--model-parameter-verification)
+> 2. [Multi-Process Parallel MCTS Benchmark](#2-multi-process-parallel-mcts-benchmark)
+> 3. [Hyperparameter Simulation Search](#3-hyperparameter-simulation-search-5-rounds)
+> 4. [Training Pipeline & Optimizations](#4-training-pipeline--optimizations-traintrainpy)
+> 5. [Real-Data Training Run: transformer_20m](#5-real-data-training-run-transformer_20m)
+> 6. [Tactical Puzzle Solver Benchmark](#6-tactical-puzzle-solver-benchmark)
+> 7. [Baseline Head-to-Head Evaluation](#7-baseline-head-to-head-evaluation-unichestransformer-vs-chess_ai-v200)
+> 8. [Continuous Training & Domination Progression](#8-continuous-training--domination-progression-steps-2000---15000)
+> 9. [Large-Scale 100-Game Evaluation](#9-large-scale-100-game-head-to-head-evaluation)
+> 10. [Dual Engine Web Service Deployment](#10-dual-engine-web-service-deployment--verification)
+> 11. [Stratified 20M Full-Scale Training & C++ MCTS](#11-stratified-20m-full-scale-training-c-mcts-integration--verification)
+> 12. [Curriculum Learning & Leaf Syzygy](#12-curriculum-learning-middlegame--endgame-c-mcts-leaf-level-syzygy-integration-and-championship-match-vs-model-r)
+> 13. [P4 Self-Play Training & Corrected Championship](#13-p4-self-play-training--corrected-championship-match-10-0-vs-model-r)
+> 14. [Head-to-Head Summary (All Stages)](#14-head-to-head-performance-vs-model-r-all-stages-summary)
+
+---
+
 ## 1. Stage Overview & Model Parameter Verification
 
-| Architecture Preset | Layers | $d_{\text{model}}$ | Heads | Parameters | Parameter Target | Status |
+Parameter counts below are measured against the current `model/transformer.py` (which includes
+the MLH head added in Stage P3). Earlier revisions of this document reported lower counts taken
+before the MLH head existed.
+
+| Architecture Preset | Layers | $d_{\text{model}}$ | Heads | Parameters (measured) | Parameter Target | Status |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| `transformer_tiny` | 6 | 192 | 6 | 3,804,871 | ~3.8M | Verified |
-| `transformer_small` | 8 | 256 | 8 | 6,724,487 | ~6.7M | Verified |
-| `transformer_medium` | 10 | 384 | 12 | 18,498,823 | ~18.5M | Verified |
-| `transformer_large` | 12 | 512 | 16 | 35,088,007 | ~35M | Verified |
-| **`transformer_20m`** | 11 | 384 | 12 | 20,318,983 | ~20.2M | **Verified** |
-| **`transformer_50m`** | 17 | 512 | 16 | 49,725,063 | ~49.7M | **Verified** |
-| **`stratified_20m`** | 3 x 11 | 384 | 12 | 60,956,949 | 3 x ~20.3M | **Verified** |
+| `transformer_tiny` | 6 | 192 | 6 | 3,817,288 | ~3.8M | Verified |
+| `transformer_small` | 8 | 256 | 8 | 6,741,000 | ~6.7M | Verified |
+| `transformer_medium` | 10 | 384 | 12 | 18,523,528 | ~18.5M | Verified |
+| `transformer_large` | 12 | 512 | 16 | 35,120,904 | ~35M | Verified |
+| **`transformer_20m`** | 11 | 384 | 12 | 20,343,688 | ~20.3M | **Verified** |
+| **`transformer_50m`** | 17 | 512 | 16 | 49,757,960 | ~49.7M | **Verified** |
+| **`stratified_20m`** | 3 x 11 | 384 | 12 | 61,031,064 | 3 x ~20.3M | **Verified** |
+
+> **Do not count raw checkpoint state-dict entries.** `stratified_20m` registers its experts
+> under both `opening/middlegame/endgame.*` and `experts.0/1/2.*` (aliases of the same
+> modules), so a saved state dict holds ~122M entries for a 61.0M-parameter model. Use
+> `sum(p.numel() for p in model.parameters())` on the instantiated model instead.
+
+> **Checkpoint compatibility.** Checkpoints produced before Stage P3 (e.g.
+> `runs/stratified_middlegame_curriculum/best_model.pt`) lack the `mlh_head` keys and raise
+> `RuntimeError: Missing key(s) in state_dict` against the current architecture. Always
+> regenerate or re-pin intermediate checkpoints rather than pointing production configs at them.
+>
+> **Path note.** Sections written before the repository was renamed contain the stale prefix
+> `/home/jeefy/UniChessTransformer/`; read it as `/home/jeefy/UniChess/Transformer/`. Checkpoint
+> paths quoted in older sections are superseded by §14 and the current-best pointer in
+> `README.md`.
 
 ---
 
