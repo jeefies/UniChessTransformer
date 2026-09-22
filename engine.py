@@ -9,7 +9,7 @@ Exposes `class GameEngine` satisfying Server/models/__init__.py contract:
 - cleanup()
 
 Shares the underlying TransformerEngine weights across sessions using a thread-safe singleton cache
-keyed by (ckpt, device, precision, syzygy_path, use_cpp_mcts).
+keyed by (ckpt, device, precision, syzygy_path, use_cpp_mcts, book_path).
 """
 from __future__ import annotations
 
@@ -30,7 +30,7 @@ from engine.engine import TransformerEngine
 
 logger = logging.getLogger(__name__)
 
-_SHARED_ENGINES: dict[tuple[str, str, str, str | None, bool], TransformerEngine] = {}
+_SHARED_ENGINES: dict[tuple[str, str, str, str | None, bool, str | None], TransformerEngine] = {}
 _SHARED_LOCK = threading.Lock()
 
 
@@ -40,6 +40,7 @@ def get_shared_engine(
     precision: str = "fp16",
     syzygy_path: str | None = None,
     use_cpp_mcts: bool = True,
+    book_path: str | None = None,
 ) -> TransformerEngine:
     key = (
         str(Path(ckpt).resolve()) if ckpt else "",
@@ -47,6 +48,7 @@ def get_shared_engine(
         str(precision),
         str(syzygy_path) if syzygy_path else None,
         bool(use_cpp_mcts),
+        str(Path(book_path).resolve()) if book_path else None,
     )
     with _SHARED_LOCK:
         if key not in _SHARED_ENGINES:
@@ -57,6 +59,7 @@ def get_shared_engine(
                 syzygy_path=syzygy_path,
                 mcts_sims=0,  # MCTS is invoked dynamically or per-move
                 use_cpp_mcts=use_cpp_mcts,
+                book_path=book_path,
             )
             _SHARED_ENGINES[key] = engine
         return _SHARED_ENGINES[key]
@@ -74,6 +77,7 @@ class GameEngine:
         device: str = "cuda",
         precision: str = "fp16",
         syzygy_path: str | None = None,
+        book_path: str | None = None,
         **kwargs: Any,
     ):
         self.ckpt = ckpt
@@ -83,6 +87,7 @@ class GameEngine:
         self.device = device
         self.precision = precision
         self.syzygy_path = syzygy_path
+        self.book_path = book_path
         self.extra_kwargs = kwargs
 
         self.engine = get_shared_engine(
@@ -91,6 +96,7 @@ class GameEngine:
             precision=self.precision,
             syzygy_path=self.syzygy_path,
             use_cpp_mcts=self.use_cpp_mcts,
+            book_path=self.book_path,
         )
 
         self.board = chess.Board()

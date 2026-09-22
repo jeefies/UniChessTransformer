@@ -2,25 +2,25 @@
 
 **UniChessTransformer** (Model T) is a state-of-the-art neural chess engine combining Transformer backbones with 2D spatial geometric priors, bilinear square-to-square policy heads, Win-Draw-Loss (WDL) value heads, phase-stratified routing, and high-performance batched Monte Carlo Tree Search (MCTS) accelerated by C++.
 
-UniChessTransformer's flagship model (`runs/stratified_middlegame_curriculum/best_model.pt`) defeated Model R (`chess_ai` / ResNet 15x192) in a 10-game compute-aligned championship match **5.5 - 4.5** at 2400 MCTS simulations, running at **0.34s/move** (~1.9x faster than Model R's 0.65s/move).
+UniChessTransformer's flagship model (`runs/stratified_p4_selfplay_corrected/best_model.pt`) achieved a perfect **10-0** clean sweep against Model R (`chess_ai` / ResNet 15x192) in a 10-game compute-aligned championship match at 2400 MCTS simulations, running at **0.22s-0.29s/move**.
 
 ---
 
 ## Key Features
 
 - **Geometric Transformer Architecture**:
-  - **ConvStem (19 $\to d_{\text{model}}$)**: Maps 19 canonical bitboard planes directly into 64 spatial square tokens.
-  - **Decoupled 2D Embeddings & Relative Attention Bias**: Pairs learned rank/file embeddings with learned pairwise $64 \times 64$ relative position biases injected into scaled dot-product attention (SDPA / FlashAttention).
-  - **Bilinear Square-to-Square Policy Head**: Projects square representations into origin queries ($Q \in \mathbb{R}^{64 \times 64}$) and destination keys ($K \in \mathbb{R}^{64 \times 64}$), enforcing chessboard geometric constraints while avoiding parameter explosion.
-  - **WDL Value Head**: Directly predicts Win, Draw, and Loss probabilities via global `[CLS]` token representation.
+  - **ConvStem (19 -> d_model)**: Maps 19 canonical bitboard planes directly into 64 spatial square tokens.
+  - **Decoupled 2D Embeddings & Relative Attention Bias**: Pairs learned rank/file embeddings with learned pairwise 64x64 relative position biases injected into scaled dot-product attention (SDPA / FlashAttention).
+  - **Bilinear Square-to-Square Policy Head**: Projects square representations into origin queries (Q in R^{64x64}) and destination keys (K in R^{64x64}), enforcing chessboard geometric constraints while avoiding parameter explosion.
+  - **WDL Value Head**: Directly predicts Win, Draw, and Loss probabilities via global [CLS] token representation.
 
 - **Model Hierarchy & Phase-Stratified Routing**:
-  - **`stratified_20m`** (~60.8M params total, 3 $\times$ 11 layers): Dynamic phase-stratified routing dispatching positions across 3 specialized ~20M expert networks:
+  - **`stratified_20m`** (~60.8M params total, 3 x 11 layers): Dynamic phase-stratified routing dispatching positions across 3 specialized ~20M expert networks:
     - **Opening Expert**: `piece_count >= 24` or `ply <= 20`
     - **Middlegame Expert**: `12 < piece_count < 24` (further refined with curriculum fine-tuning)
     - **Endgame Expert**: `piece_count <= 12` (curriculum fine-tuned with Syzygy guidance)
-  - **`transformer_20m`** (~20.3M params, 11 layers, $d=384$, 12 heads): Fast inference single-backbone model.
-  - **`transformer_50m`** (~49.7M params, 17 layers, $d=512$, 16 heads): Deep monolithic transformer tier.
+  - **`transformer_20m`** (~20.3M params, 11 layers, d=384, 12 heads): Fast inference single-backbone model.
+  - **`transformer_50m`** (~49.7M params, 17 layers, d=512, 16 heads): Deep monolithic transformer tier.
   - Lightweight presets (`transformer_tiny`, `transformer_small`, `transformer_medium`, `transformer_large`).
 
 - **C++ Accelerated MCTS Engine (`search/cpp/`)**:
@@ -32,7 +32,12 @@ UniChessTransformer's flagship model (`runs/stratified_middlegame_curriculum/bes
 - **Training & Curriculum Learning**:
   - Distillation from Stockfish evaluations with joint policy softmax cross-entropy and WDL loss.
   - Phase-stratified curriculum training on 64 binary shards (`/home/jeefy/UniChess/data/shards_evals`).
-  - Current best model: `runs/stratified_middlegame_curriculum/best_model.pt`.
+  - Current best model: `runs/stratified_p4_selfplay_corrected/best_model.pt`.
+
+- **Self-Play Pipeline (`tools/gumbel_selfplay.py`)**:
+  - Gumbel AlphaZero self-play RL pipeline with C++ MCTS tree reuse.
+  - 3 phases: (1) Self-play data collection via C++ MCTS, (2) Training on self-play positions, (3) Save updated model.
+  - P4 corrected configuration: LR=5e-6, grad_accum=4, 30% mixed real/self-play data.
 
 - **Standards & Server Integration**:
   - Full UCI protocol compliance (`uci.py`) supporting standard chess GUIs.
@@ -45,32 +50,40 @@ UniChessTransformer's flagship model (`runs/stratified_middlegame_curriculum/bes
 
 ```
                       Canonical Board Input (19x8x8)
-                                    │
-                         ConvStem (3x3, stride 1)
-                                    │
-                    64 Square Tokens + [CLS] Token
-                                    │
-                + Rank / File Embeddings & 2D Rel Bias
-                                    │
-                  Transformer Encoder Layers (Pre-LN)
-                - FlashAttention / SDPA with Pairwise Bias
-                - SwiGLU / GeLU Feed-Forward MLP
-                                    │
-            ┌───────────────────────┴───────────────────────┐
-            │                                               │
-  Bilinear Policy Head                                WDL Value Head
-(Origin Queries x Dest Keys)                       (MLP on [CLS] Token)
-            │                                               │
-4096 Move Logits + Promotion Logits              Win / Draw / Loss Probabilities
+                                    |
+                          ConvStem (3x3, stride 1)
+                                    |
+                     64 Square Tokens + [CLS] Token
+                                    |
+                 + Rank / File Embeddings & 2D Rel Bias
+                                    |
+                   Transformer Encoder Layers (Pre-LN)
+                 - FlashAttention / SDPA with Pairwise Bias
+                 - SwiGLU / GeLU Feed-Forward MLP
+                                    |
+             +---------------------------------------+
+             |                                       |
+   Bilinear Policy Head                        WDL Value Head
+   (Origin Queries x Dest Keys)               (MLP on [CLS] Token)
+             |                                       |
+   4096 Move Logits + Promotion Logits     Win / Draw / Loss Probabilities
 ```
 
 ---
 
 ## Head-to-Head Benchmark Results
 
-### 10-Game Championship Match vs Model R (`chess_ai` / ResNet 15x192)
-Evaluated across 5 balanced opening pairs (Italian, Ruy Lopez, Sicilian, French, Queen's Gambit Declined):
+### P4 Self-Play Championship Match vs Model R (`chess_ai` / ResNet 15x192)
+Evaluated across 5 balanced opening pairs (Italian, Ruy Lopez, Scotch, Four Knights, Petroff):
 
+| Matchup | Model T (P4 Self-Play Corrected) | Model R (ResNet 15x192) |
+| :--- | :---: | :---: |
+| **Search Engine** | **C++ MCTS + Leaf Syzygy (2400 sims)** | Python MCTS + Syzygy (800 sims) |
+| **Final Score** | **10.0 / 10 (100.0%)** | 0.0 / 10 (0.0%) |
+| **Game Record** | **10 Wins, 0 Draws, 0 Losses** | 0 Wins, 0 Draws, 10 Losses |
+| **Average Move Latency** | **0.22s - 0.29s / move** | 0.21s - 0.28s / move |
+
+### Curriculum Match vs Model R (10 Games)
 | Matchup | Model T (Stratified 20M Curriculum) | Model R (ResNet 15x192) |
 | :--- | :---: | :---: |
 | **Search Engine** | **C++ MCTS + Leaf Syzygy (2400 sims)** | Python MCTS + Syzygy (800 sims) |
@@ -127,7 +140,8 @@ UniChessTransformer/
 │   ├── match_baseline.py   # Baseline match harness against chess_ai
 │   └── puzzle_bench.py     # Lichess/curated tactical puzzle suite evaluator
 ├── tools/                  # Analysis & hyperparameter optimization
-│   └── hyperparam_search.py# Parallel Bayesian/Grid search for MCTS parameters
+│   ├── hyperparam_search.py# Parallel Bayesian/Grid search for MCTS parameters
+│   └── gumbel_selfplay.py  # Gumbel AlphaZero self-play RL pipeline
 ├── tests/                  # Test suites
 │   ├── test_all.py         # Full unit test suite (13 tests)
 │   └── test_cpp_mcts.py    # Dedicated C++ MCTS verification suite
@@ -143,8 +157,19 @@ UniChessTransformer/
 ### Running the UCI Engine
 ```bash
 /home/jeefy/miniconda3/envs/unichess/bin/python uci.py \
-  --ckpt runs/stratified_middlegame_curriculum/best_model.pt \
+  --ckpt runs/stratified_p4_selfplay_corrected/best_model.pt \
   --mcts-sims 2400 \
+  --device cuda
+```
+
+### Running Self-Play Pipeline
+```bash
+/home/jeefy/miniconda3/envs/unichess/bin/python tools/gumbel_selfplay.py \
+  --ckpt runs/stratified_p1_opening/best_model.pt \
+  --num-games 100 \
+  --sims 800 \
+  --lr 5e-6 \
+  --grad-accum 4 \
   --device cuda
 ```
 

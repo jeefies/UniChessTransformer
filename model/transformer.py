@@ -216,6 +216,13 @@ class ChessTransformer(nn.Module):
             nn.Linear(d_model, 3),
         )
 
+        # Moves-Left Head (MLH): CLS token -> Linear(d_model, 64) -> SiLU -> Linear(64, 1)
+        self.mlh_head = nn.Sequential(
+            nn.Linear(d_model, 64),
+            nn.SiLU(),
+            nn.Linear(64, 1),
+        )
+
         self._init_weights()
 
     def _init_weights(self):
@@ -230,15 +237,21 @@ class ChessTransformer(nn.Module):
                 if m.bias is not None:
                     nn.init.zeros_(m.bias)
 
-    def forward(self, x: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+    def forward(
+        self,
+        x: torch.Tensor,
+        return_mlh: bool = False,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Forward pass.
 
         Input:
             x: Tensor of shape (B, 19, 8, 8) or (B, 64, 19)
+            return_mlh: If True, also return mlh tensor of shape (B,)
         Returns:
-            policy_logits: (B, 4096)
-            promo_logits: (B, 4)
-            value_wdl: (B, 3)
+            If return_mlh is False:
+                (policy_logits, promo_logits, value_wdl)
+            If return_mlh is True:
+                (policy_logits, promo_logits, value_wdl, mlh)
         """
         if x.dim() == 3 and x.shape[1] == 64 and x.shape[2] == self.cfg.in_channels:
             # Convert (B, 64, 19) -> (B, 19, 8, 8)
@@ -279,6 +292,10 @@ class ChessTransformer(nn.Module):
 
         value_wdl = self.value_head(cls_out)              # (B, 3)
 
+        if return_mlh:
+            mlh = self.mlh_head(cls_out).squeeze(-1)       # (B,)
+            return policy_logits, promo_logits, value_wdl, mlh
+
         return policy_logits, promo_logits, value_wdl
 
 
@@ -315,10 +332,15 @@ class StratifiedChessTransformer(nn.Module):
 
         has_expert_prefix = any(k.startswith(("opening.", "middlegame.", "endgame.", "experts.")) for k in clean_state_dict)
         if has_expert_prefix:
-            self.load_state_dict(clean_state_dict)
+            self.load_state_dict(clean_state_dict, strict=False)
         else:
             for expert in self.experts:
-                expert.load_state_dict(clean_state_dict)
+                expert.load_state_dict(clean_state_dict, strict=False)
+            # If base checkpoint did not include mlh_head, synchronize mlh_head across all experts
+            has_mlh = any("mlh_head" in k for k in clean_state_dict)
+            if not has_mlh:
+                for expert in self.experts[1:]:
+                    expert.mlh_head.load_state_dict(self.experts[0].mlh_head.state_dict())
 
         return self
 
@@ -338,7 +360,8 @@ class StratifiedChessTransformer(nn.Module):
         x: torch.Tensor,
         boards: list[chess.Board] | chess.Board | None = None,
         route_indices: list[int] | torch.Tensor | None = None,
-    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
+        return_mlh: bool = False,
+    ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor] | tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
         """Forward pass with dynamic phase routing.
 
         Supports single-board or batched evaluation.
@@ -378,26 +401,37 @@ class StratifiedChessTransformer(nn.Module):
         unique_routes = set(routes)
         if len(unique_routes) == 1:
             expert_idx = routes[0]
-            return self.experts[expert_idx](x)
+            return self.experts[expert_idx](x, return_mlh=return_mlh)
 
         p_out = None
         pr_out = None
         v_out = None
+        mlh_out = None
 
         for phase in range(3):
             idxs = [i for i, r in enumerate(routes) if r == phase]
             if not idxs:
                 continue
             sub_x = x[idxs]
-            sub_p, sub_pr, sub_v = self.experts[phase](sub_x)
+            if return_mlh:
+                sub_p, sub_pr, sub_v, sub_m = self.experts[phase](sub_x, return_mlh=True)
+            else:
+                sub_p, sub_pr, sub_v = self.experts[phase](sub_x, return_mlh=False)
+
             if p_out is None:
                 p_out = torch.empty(B, 4096, device=x.device, dtype=sub_p.dtype)
                 pr_out = torch.empty(B, 4, device=x.device, dtype=sub_pr.dtype)
                 v_out = torch.empty(B, 3, device=x.device, dtype=sub_v.dtype)
+                if return_mlh:
+                    mlh_out = torch.empty(B, device=x.device, dtype=sub_m.dtype)
             p_out[idxs] = sub_p
             pr_out[idxs] = sub_pr
             v_out[idxs] = sub_v
+            if return_mlh:
+                mlh_out[idxs] = sub_m
 
+        if return_mlh:
+            return p_out, pr_out, v_out, mlh_out
         return p_out, pr_out, v_out
 
 
@@ -514,5 +548,5 @@ def create_transformer(preset_name: str = "transformer_small", init_from: str | 
             ckpt = torch.load(init_from, map_location="cpu", weights_only=False)
             sd = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
             clean_sd = {k.removeprefix("_orig_mod."): v for k, v in sd.items()}
-            model.load_state_dict(clean_sd)
+            model.load_state_dict(clean_sd, strict=False)
     return model

@@ -41,12 +41,22 @@ High-performance neural chess engine combining Transformer backbones with 2D spa
   ```
 - **Launch UCI Engine Interface**:
   ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python uci.py --ckpt runs/stratified_middlegame_curriculum/best_model.pt --mcts-sims 2400 --device cuda
+  /home/jeefy/miniconda3/envs/unichess/bin/python uci.py --ckpt runs/stratified_p4_selfplay_corrected/best_model.pt --mcts-sims 2400 --device cuda
+  ```
+- **Run Self-Play Pipeline (P4)**:
+  ```bash
+  /home/jeefy/miniconda3/envs/unichess/bin/python tools/gumbel_selfplay.py \
+    --ckpt runs/stratified_p1_opening/best_model.pt \
+    --num-games 100 \
+    --sims 800 \
+    --lr 5e-6 \
+    --grad-accum 4 \
+    --device cuda
   ```
 - **Run Match Against Baseline (`chess_ai v2.0.0`)**:
   ```bash
   /home/jeefy/miniconda3/envs/unichess/bin/python eval/match_baseline.py \
-    --ckpt runs/stratified_middlegame_curriculum/best_model.pt \
+    --ckpt runs/stratified_p4_selfplay_corrected/best_model.pt \
     --games 100 \
     --sims 100 \
     --baseline-seconds 0.25
@@ -55,7 +65,7 @@ High-performance neural chess engine combining Transformer backbones with 2D spa
 ## Architecture & Conventions
 
 ### Model Tiers
-- **Current Best Model**: `runs/stratified_middlegame_curriculum/best_model.pt` (Stratified 20M trained with middlegame curriculum fine-tuning).
+- **Current Best Model**: `runs/stratified_p4_selfplay_corrected/best_model.pt` (Stratified 20M trained with P4 self-play + mixed data, LR=5e-6, grad_accum=4).
 - `stratified_20m` (`StratifiedChessTransformer`): 3 specialized ~20M expert networks dynamically dispatched by phase:
   - Phase 0 (Opening): `piece_count >= 24` or `ply <= 20`
   - Phase 1 (Middlegame): `12 < piece_count < 24`
@@ -83,12 +93,18 @@ High-performance neural chess engine combining Transformer backbones with 2D spa
 - **Multi-Process Parallel MCTS (`search/parallel_mcts.py`)**: Lock-free worker processes communicating with central GPU batched evaluator.
 
 ### Head-to-Head Performance vs Model R
-- **Match Result**: Model T won **5.5 - 4.5** against Model R (`chess_ai` / ResNet 15x192) in a 10-game championship match across 5 balanced opening pairs.
-- **Configuration**: Model T configured at 2400 MCTS simulations vs Model R at 800 simulations; Model T executed at **0.34s/move** (~1.9x faster than Model R's 0.65s/move) due to C++ MCTS throughput.
+- **Match Result**: Model T won **10-0** against Model R (`chess_ai` / ResNet 15x192) in a 10-game P4 self-play corrected championship match across 5 balanced opening pairs.
+- **Configuration**: Model T configured at 2400 MCTS simulations vs Model R at 800 simulations; Model T executed at **0.22s-0.29s/move** (parity with Model R's 0.21s-0.28s/move at 2400 sims due to C++ MCTS throughput).
+- **Previous Result**: Model T won **5.5 - 4.5** against Model R in the Stage 4 curriculum match (10 games, 2400 vs 800 sims).
+
+### Self-Play Pipeline (`tools/gumbel_selfplay.py`)
+- **Gumbel AlphaZero self-play RL pipeline** with C++ MCTS tree reuse.
+- **Phases**: (1) Self-play data collection, (2) Training on self-play positions, (3) Save updated model.
+- **P4 Corrected Recipe**: LR=5e-6, grad_accum=4, 30% mixed real/self-play data.
 
 ### Server Integration (`~/UniChess/Server`)
 - Model adapter integrated via symlink: `/home/jeefy/UniChess/Server/models/T -> /home/jeefy/UniChess/Transformer`.
-- Server configuration (`config.json`): uses `runs/stratified_middlegame_curriculum/best_model.pt` at `max_mcts` tier (2400 simulations, batch size 64, fp16 on CUDA, leaf Syzygy 3-4-5 tablebase).
+- Server configuration (`config.json`): uses `runs/stratified_p4_selfplay_corrected/best_model.pt` at `max_mcts` tier (2400 simulations, batch size 64, fp16 on CUDA, leaf Syzygy 3-4-5 tablebase).
 - Managed as systemd user service `unichess-server`:
   ```bash
   systemctl --user status unichess-server

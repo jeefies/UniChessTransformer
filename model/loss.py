@@ -1,4 +1,4 @@
-"""Loss function for Chess Transformer: Policy CrossEntropy, WDL CrossEntropy, and Promotion CrossEntropy."""
+"""Loss function for Chess Transformer: Policy CrossEntropy/KL, WDL CrossEntropy, and Promotion CrossEntropy."""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -15,21 +15,28 @@ class LossOutput:
     promo_loss: torch.Tensor
     wdl_loss: torch.Tensor
     metrics: dict[str, float]
+    mlh_loss: torch.Tensor | None = None
 
 
 class ChessLoss(nn.Module):
-    """Combined loss module for policy (soft CE), promotion (CE), and WDL value (soft CE)."""
+    """Combined loss module for policy (soft CE / KL), promotion (CE), and WDL value (soft CE)."""
 
     def __init__(
         self,
         policy_weight: float = 1.0,
         promo_weight: float = 0.1,
         wdl_weight: float = 1.0,
+        mlh_weight: float = 0.05,
+        policy_loss_type: str = "cross_entropy",
     ):
         super().__init__()
         self.policy_weight = policy_weight
         self.promo_weight = promo_weight
         self.wdl_weight = wdl_weight
+        self.mlh_weight = mlh_weight
+        if policy_loss_type not in ("cross_entropy", "kl_divergence"):
+            raise ValueError(f"Unsupported policy_loss_type: {policy_loss_type}")
+        self.policy_loss_type = policy_loss_type
 
     def forward(
         self,
@@ -39,6 +46,8 @@ class ChessLoss(nn.Module):
         policy_target: torch.Tensor,
         promo_target: torch.Tensor,
         wdl_target: torch.Tensor,
+        mlh_logits: torch.Tensor | None = None,
+        mlh_target: torch.Tensor | None = None,
     ) -> LossOutput:
         """Compute loss and accuracy metrics.
 
@@ -49,9 +58,15 @@ class ChessLoss(nn.Module):
             policy_target: (B, 4096) soft probability targets
             promo_target: (B,) promotion targets with -100 for non-promotions
             wdl_target: (B, 3) soft WDL probability targets
+            mlh_logits: (B,) predicted moves-left logits (optional)
+            mlh_target: (B,) target moves-left pseudo values (optional)
         """
-        # 1. Policy Loss (CrossEntropy on soft probability targets)
-        loss_policy = F.cross_entropy(policy_logits, policy_target)
+        # 1. Policy Loss
+        if self.policy_loss_type == "kl_divergence":
+            log_pred = F.log_softmax(policy_logits, dim=-1)
+            loss_policy = F.kl_div(log_pred, policy_target, reduction="batchmean", log_target=False)
+        else:
+            loss_policy = F.cross_entropy(policy_logits, policy_target)
 
         # 2. Promotion Loss (CrossEntropy on valid promotion targets)
         valid_promo = (promo_target != -100)
@@ -69,6 +84,11 @@ class ChessLoss(nn.Module):
             + self.wdl_weight * loss_wdl
         )
 
+        loss_mlh = None
+        if mlh_logits is not None and mlh_target is not None:
+            loss_mlh = F.smooth_l1_loss(mlh_logits, mlh_target)
+            total_loss = total_loss + self.mlh_weight * loss_mlh
+
         # Metrics
         with torch.no_grad():
             metrics = compute_metrics(
@@ -79,6 +99,9 @@ class ChessLoss(nn.Module):
                 promo_target,
                 wdl_target,
             )
+            if loss_mlh is not None:
+                metrics["mlh_loss"] = loss_mlh.item()
+                metrics["mlh_mae"] = F.l1_loss(mlh_logits, mlh_target).item()
 
         return LossOutput(
             total_loss=total_loss,
@@ -86,6 +109,7 @@ class ChessLoss(nn.Module):
             promo_loss=loss_promo,
             wdl_loss=loss_wdl,
             metrics=metrics,
+            mlh_loss=loss_mlh,
         )
 
 

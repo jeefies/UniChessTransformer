@@ -13,7 +13,6 @@
 
 namespace chess {
 
-// Policy index mapping: from_sq * 64 + to_sq
 inline int move_to_index(const Move& m) {
     return (int)m.from_sq * 64 + (int)m.to_sq;
 }
@@ -29,8 +28,10 @@ struct MCTSConfig {
     float dirichlet_alpha = 0.3f;
     float dirichlet_eps = 0.25f;
     float fpu_reduction = 0.2f;
+    float c_fpu = 0.5f;
     float temperature = 0.0f;
     float virtual_loss = 1.0f;
+    float contempt = 0.0f;
     bool claim_draw = false;
     int max_collision = 8;
     int root_min_visits = 1;
@@ -38,12 +39,17 @@ struct MCTSConfig {
     TablebaseProbeFn tablebase_probe_fn = nullptr;
 };
 
+struct Node;
+
+inline float compute_parent_q(const Node& node, float virtual_loss);
+inline float compute_fpu_q(const Node& node, const MCTSConfig& cfg);
+
 struct Node {
     std::vector<Move> moves;
-    std::vector<float> P;   // Priors
-    std::vector<int> N;     // Visit counts
-    std::vector<float> W;   // Value sums
-    std::vector<float> VL;  // Virtual losses
+    std::vector<float> P;
+    std::vector<int> N;
+    std::vector<float> W;
+    std::vector<float> VL;
     std::vector<std::unique_ptr<Node>> children;
 
     bool expanded = false;
@@ -67,37 +73,19 @@ struct Node {
     int best_child(const MCTSConfig& cfg) const {
         int total = std::max(sum_N, 1);
         float c = std::log((1.0f + total + cfg.c_puct_base) / cfg.c_puct_base) + cfg.c_puct_init;
+        float fpu_q = compute_fpu_q(*this, cfg);
 
         int best_idx = 0;
         float best_score = -1e9f;
 
-        // FPU calculation
-        float sum_visited_w = 0.0f;
-        float sum_visited_denom = 0.0f;
-        int visited_count = 0;
-
         for (size_t i = 0; i < moves.size(); ++i) {
-            float denom = N[i] + VL[i];
-            if (denom > 0.0f) {
-                sum_visited_w += (W[i] - cfg.virtual_loss * VL[i]);
-                sum_visited_denom += denom;
-                visited_count++;
-            }
-        }
-
-        float parent_q = (visited_count > 0 && sum_visited_denom > 0.0f)
-                         ? (sum_visited_w / sum_visited_denom)
-                         : 0.0f;
-        float fpu_q = parent_q - cfg.fpu_reduction;
-
-        for (size_t i = 0; i < moves.size(); ++i) {
-            float denom = N[i] + VL[i];
-            float q = (denom > 0.0f) ? ((W[i] - cfg.virtual_loss * VL[i]) / denom) : fpu_q;
-            float u = c * P[i] * std::sqrt((float)total) / (1.0f + denom);
+            float total_n = N[i] + VL[i];
+            float q = (total_n > 0.0f) ? ((W[i] - cfg.virtual_loss * VL[i]) / total_n) : fpu_q;
+            float u = c * P[i] * std::sqrt((float)total) / (1.0f + total_n);
             float score = q + u;
             if (score > best_score) {
                 best_score = score;
-                best_idx = i;
+                best_idx = (int)i;
             }
         }
 
@@ -105,10 +93,36 @@ struct Node {
     }
 };
 
+inline float compute_parent_q(const Node& node, float virtual_loss) {
+    float sum_visited_w = 0.0f;
+    float sum_visited_denom = 0.0f;
+    int visited_count = 0;
+    for (size_t i = 0; i < node.moves.size(); ++i) {
+        float total_n = node.N[i] + node.VL[i];
+        if (total_n > 0.0f) {
+            sum_visited_w += (node.W[i] - virtual_loss * node.VL[i]);
+            sum_visited_denom += total_n;
+            visited_count++;
+        }
+    }
+    if (visited_count > 0 && sum_visited_denom > 0.0f) {
+        return sum_visited_w / sum_visited_denom;
+    }
+    return 0.0f;
+}
+
+inline float compute_fpu_q(const Node& node, const MCTSConfig& cfg) {
+    float parent_q = compute_parent_q(node, cfg.virtual_loss);
+    if (cfg.c_fpu > 0.0f) {
+        return parent_q - cfg.c_fpu * std::sqrt(1.0f / (1.0f + (float)std::max(node.sum_N, 1)));
+    }
+    return parent_q - cfg.fpu_reduction;
+}
+
 inline void priors_from_policy(
     const Board& board,
-    const float* policy,   // 4096 floats
-    const float* promo,    // 4 floats (Q, R, B, N)
+    const float* policy,
+    const float* promo,
     const std::vector<Move>& moves,
     std::vector<float>& scores
 ) {

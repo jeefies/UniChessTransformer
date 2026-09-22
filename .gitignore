@@ -38,3 +38,4 @@ session-*.md
 
 # 新增训练/对局日志（既有已跟踪日志保留为历史记录）
 logs/*.log
+logs/p4_diagnostics/

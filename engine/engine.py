@@ -177,7 +177,7 @@ class TransformerEngine:
         return p_probs[0], pr_probs[0], w_probs[0]
 
     def _from_book(self, board: chess.Board) -> chess.Move | None:
-        if self.book is None or board.fullmove_number * 2 > self.book_plies:
+        if self.book is None or board.ply() >= 16:
             return None
         try:
             entries = list(self.book.find_all(board))
@@ -185,8 +185,7 @@ class TransformerEngine:
             return None
         if not entries:
             return None
-        weights = [max(e.weight, 1) for e in entries]
-        return self.rng.choices([e.move for e in entries], weights=weights)[0]
+        return max(entries, key=lambda e: e.weight).move
 
     def _from_tablebase(self, board: chess.Board) -> chess.Move | None:
         """Syzygy tablebase play when piece count <= 5."""

@@ -10,7 +10,6 @@
 
 namespace py = pybind11;
 
-// Standalone direct helper functions for bitboard engine verification
 static uint64_t perft_recursive(chess::Board& board, int depth) {
     if (depth <= 0) return 1;
     std::vector<chess::Move> moves;
@@ -56,6 +55,10 @@ public:
     std::mt19937 rng;
     py::object syzygy_obj = py::none();
 
+    std::unique_ptr<chess::Node> stored_root;
+    chess::Board stored_root_board;
+    std::string stored_root_fen;
+
     MCTSCpp(
         float c_puct_init = 1.8f,
         float c_puct_base = 19652.0f,
@@ -76,6 +79,29 @@ public:
 
     void set_syzygy_fn(py::object syzygy) {
         syzygy_obj = syzygy;
+    }
+
+    void reset() {
+        stored_root.reset();
+        stored_root_fen.clear();
+        stored_root_board.clear();
+    }
+
+    bool reuse_root(const std::string& move_uci) {
+        if (!stored_root || !stored_root->expanded) return false;
+
+        chess::Move m = chess::Move::from_uci(move_uci);
+        for (size_t i = 0; i < stored_root->moves.size(); ++i) {
+            if (stored_root->moves[i] == m) {
+                if (!stored_root->children[i]) return false;
+                std::fill(stored_root->children[i]->VL.begin(), stored_root->children[i]->VL.end(), 0.0f);
+                stored_root_board.make_move(m);
+                stored_root_fen = stored_root_board.to_fen();
+                stored_root = std::move(stored_root->children[i]);
+                return true;
+            }
+        }
+        return false;
     }
 
     static chess::TablebaseProbeFn resolve_probe_fn(py::object obj) {
@@ -103,12 +129,20 @@ public:
         std::vector<std::pair<chess::Node*, int>> path;
     };
 
-    void backup(const std::vector<std::pair<chess::Node*, int>>& path, float value) {
+    void backup(const std::vector<std::pair<chess::Node*, int>>& path, float value, float contempt, int root_N) {
         float v = value;
-        for (auto it = path.rbegin(); it != path.rend(); ++it) {
+        float draw_bias = 0.0f;
+        if (contempt != 0.0f && root_N > 0 && std::abs(v) < 1e-6f) {
+            draw_bias = contempt * (1.0f / (1.0f + (float)root_N));
+        }
+
+        for (size_t i = 0; i < path.size(); ++i) {
             v = -v;
-            chess::Node* n = it->first;
-            int edge = it->second;
+            if (i == path.size() - 1 && draw_bias != 0.0f) {
+                v += draw_bias;
+            }
+            chess::Node* n = path[path.size() - 1 - i].first;
+            int edge = path[path.size() - 1 - i].second;
             n->N[edge] += 1;
             n->W[edge] += v;
             n->VL[edge] -= cfg.virtual_loss;
@@ -116,8 +150,6 @@ public:
         }
     }
 
-    // Search function taking a FEN string, Python evaluator callback, and optional Syzygy tablebase probe
-    // evaluator: (torch.Tensor [B, 19, 8, 8]) -> tuple[torch.Tensor [B, 4096], torch.Tensor [B, 4], torch.Tensor [B, 3]]
     py::tuple search(
         const std::string& fen,
         py::function evaluator,
@@ -126,11 +158,17 @@ public:
         bool add_noise = false,
         float temperature = 0.0f,
         py::object syzygy = py::none(),
-        py::object syzygy_path = py::none()
+        py::object syzygy_path = py::none(),
+        bool reuse = false,
+        const std::string& previous_root_fen = "",
+        float contempt = 0.0f,
+        float c_fpu = 0.5f
     ) {
         cfg.simulations = simulations;
         cfg.batch_size = batch_size;
         cfg.temperature = temperature;
+        cfg.contempt = contempt;
+        if (c_fpu > 0.0f) cfg.c_fpu = c_fpu;
 
         chess::TablebaseProbeFn tb_probe = nullptr;
         if (!syzygy_path.is_none()) {
@@ -143,10 +181,44 @@ public:
             tb_probe = cfg.tablebase_probe_fn;
         }
 
-        chess::Board root_board(fen);
-        auto root = std::make_unique<chess::Node>();
+        std::unique_ptr<chess::Node> root_uptr;
+        chess::Node* root = nullptr;
+        chess::Board root_board;
+        bool reused = false;
 
-        // Check if root is terminal
+        if (reuse) {
+            if (!previous_root_fen.empty()) {
+                chess::Board prev(previous_root_fen);
+                std::vector<chess::Move> legal_moves;
+                prev.generate_legal_moves(legal_moves);
+                std::string played_move;
+                for (const auto& m : legal_moves) {
+                    chess::Board next = prev;
+                    next.make_move(m);
+                    if (next.to_fen() == fen) {
+                        played_move = m.to_uci();
+                        break;
+                    }
+                }
+                if (!played_move.empty() && reuse_root(played_move)) {
+                    root = stored_root.get();
+                    root_board = stored_root_board;
+                    reused = true;
+                }
+            }
+            if (!reused && stored_root_fen == fen && stored_root && stored_root->expanded) {
+                root = stored_root.get();
+                root_board = stored_root_board;
+                reused = true;
+            }
+        }
+
+        if (!root) {
+            root_uptr = std::make_unique<chess::Node>();
+            root = root_uptr.get();
+            root_board = chess::Board(fen);
+        }
+
         int root_term = root_board.check_terminal(cfg.claim_draw);
         if (root_term != 2) {
             root->expanded = true;
@@ -156,12 +228,15 @@ public:
             metrics["visits"] = 0;
             metrics["root_value"] = root->terminal_value;
             metrics["tablebase_hits"] = 0;
+            metrics["reused_root"] = reused;
+            if (!reused && root_uptr) {
+                stored_root = std::move(root_uptr);
+                stored_root_fen = fen;
+            }
             return py::make_tuple("", metrics);
         }
 
-        // Initial root expansion
-        {
-            // Allocate 1 tensor on CPU
+        if (!reused) {
             auto options = torch::TensorOptions().dtype(torch::kFloat32);
             torch::Tensor root_plane_tensor = torch::zeros({1, 19, 8, 8}, options);
             root_board.encode_planes(root_plane_tensor.data_ptr<float>());
@@ -181,6 +256,9 @@ public:
                 metrics["visits"] = 0;
                 metrics["root_value"] = 0.0f;
                 metrics["tablebase_hits"] = 0;
+                metrics["reused_root"] = false;
+                stored_root = std::move(root_uptr);
+                stored_root_fen = fen;
                 return py::make_tuple("", metrics);
             }
 
@@ -189,7 +267,7 @@ public:
             std::vector<float> priors;
             chess::priors_from_policy(root_board, p_ptr, pr_ptr, legal_moves, priors);
 
-            if (add_noise && cfg.dirichlet_alpha > 0.0f && !legal_moves.empty()) {
+            if (add_noise && cfg.dirichlet_alpha > 0.0f && !legal_moves.empty() && !reused) {
                 std::gamma_distribution<float> gamma(cfg.dirichlet_alpha, 1.0f);
                 std::vector<float> noise(legal_moves.size());
                 float sum_noise = 0.0f;
@@ -208,11 +286,10 @@ public:
             root->expand(legal_moves, priors);
         }
 
-        int network_batches = 1;
-        int network_positions = 1;
+        int network_batches = reused ? 0 : 1;
+        int network_positions = reused ? 0 : 1;
         int tablebase_hits = 0;
 
-        // Vector to store paths of unexpanded leaves in current batch
         std::vector<LeafPath> leaves;
         leaves.reserve(batch_size);
 
@@ -220,7 +297,7 @@ public:
             leaves.clear();
 
             for (int b = 0; b < batch_size && root->sum_N + (int)leaves.size() < simulations; ++b) {
-                chess::Node* curr = root.get();
+                chess::Node* curr = root;
                 chess::Board curr_board = root_board;
                 std::vector<std::pair<chess::Node*, int>> path;
 
@@ -234,12 +311,14 @@ public:
                     float c = std::log((1.0f + N_parent + cfg.c_puct_base) / cfg.c_puct_base) + cfg.c_puct_init;
                     float sqrt_N = std::sqrt((float)std::max(1, N_parent));
 
+                    float fpu_q = chess::compute_fpu_q(*curr, cfg);
+
                     for (size_t a = 0; a < curr->moves.size(); ++a) {
                         int n_child = curr->N[a];
                         float vl = curr->VL[a];
                         float total_n = n_child + vl;
 
-                        float q = (total_n > 0.0f) ? (curr->W[a] - vl * cfg.virtual_loss) / total_n : 0.0f;
+                        float q = (total_n > 0.0f) ? (curr->W[a] - vl * cfg.virtual_loss) / total_n : fpu_q;
                         float u = c * curr->P[a] * sqrt_N / (1.0f + total_n);
                         float score = q + u;
 
@@ -272,7 +351,7 @@ public:
                 }
 
                 if (reached_terminal || curr->is_terminal) {
-                    backup(path, curr->terminal_value);
+                    backup(path, curr->terminal_value, cfg.contempt, root->sum_N);
                 } else if (!curr->expanded) {
                     bool tb_hit = false;
                     if (tb_probe && curr_board.piece_count() <= cfg.tablebase_pieces) {
@@ -281,7 +360,7 @@ public:
                             curr->expanded = true;
                             curr->is_terminal = true;
                             curr->terminal_value = exact_val;
-                            backup(path, exact_val);
+                            backup(path, exact_val, cfg.contempt, root->sum_N);
                             tablebase_hits++;
                             tb_hit = true;
                         }
@@ -301,7 +380,6 @@ public:
                 continue;
             }
 
-            // Batch evaluate leaves
             int num_leaves = (int)leaves.size();
             auto options = torch::TensorOptions().dtype(torch::kFloat32);
             torch::Tensor batch_tensor = torch::zeros({num_leaves, 19, 8, 8}, options);
@@ -338,24 +416,29 @@ public:
                     int term = leaf.board.check_terminal(cfg.claim_draw);
                     float term_v = (term != 2) ? (float)term : 0.0f;
                     leaf.node->terminal_value = term_v;
-                    backup(leaf.path, term_v);
+                    backup(leaf.path, term_v, cfg.contempt, root->sum_N);
                 } else {
                     const float* p_sub = p_data + idx * 4096;
                     const float* pr_sub = pr_data + idx * 4;
                     std::vector<float> priors;
                     chess::priors_from_policy(leaf.board, p_sub, pr_sub, legal_moves, priors);
                     leaf.node->expand(legal_moves, priors);
-                    backup(leaf.path, v);
+                    backup(leaf.path, v, cfg.contempt, root->sum_N);
                 }
             }
         }
 
-        // Return best move
+        if (!reused) {
+            stored_root = std::move(root_uptr);
+            stored_root_fen = fen;
+        }
+
         if (root->moves.empty()) {
             py::dict metrics;
             metrics["visits"] = 0;
             metrics["root_value"] = root->terminal_value;
             metrics["tablebase_hits"] = tablebase_hits;
+            metrics["reused_root"] = reused;
             return py::make_tuple("", metrics);
         }
 
@@ -398,8 +481,8 @@ public:
         metrics["network_batches"] = network_batches;
         metrics["network_positions"] = network_positions;
         metrics["tablebase_hits"] = tablebase_hits;
+        metrics["reused_root"] = reused;
 
-        // Policy distribution: move_uci -> visit count
         py::dict visits_dict;
         for (size_t i = 0; i < root->moves.size(); ++i) {
             visits_dict[py::str(root->moves[i].to_uci())] = root->N[i];
@@ -434,6 +517,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
              py::arg("syzygy") = py::none())
         .def("set_seed", &MCTSCpp::set_seed, py::arg("seed"))
         .def("set_syzygy_fn", &MCTSCpp::set_syzygy_fn, py::arg("syzygy"))
+        .def("reset", &MCTSCpp::reset, "Reset stored tree for fresh search")
+        .def("reuse_root", &MCTSCpp::reuse_root, py::arg("move_uci"),
+             "Promote child node matching move_uci to new root for tree reuse")
         .def("search", &MCTSCpp::search,
              py::arg("fen"),
              py::arg("evaluator"),
@@ -442,5 +528,9 @@ PYBIND11_MODULE(TORCH_EXTENSION_NAME, m) {
              py::arg("add_noise") = false,
              py::arg("temperature") = 0.0f,
              py::arg("syzygy") = py::none(),
-             py::arg("syzygy_path") = py::none());
+             py::arg("syzygy_path") = py::none(),
+             py::arg("reuse") = false,
+             py::arg("previous_root_fen") = "",
+             py::arg("contempt") = 0.0f,
+             py::arg("c_fpu") = 0.5f);
 }

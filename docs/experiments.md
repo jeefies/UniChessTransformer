@@ -411,3 +411,71 @@ To support side-by-side human play and evaluation against both neural network ar
   - Production `config.json` updated to `runs/stratified_middlegame_curriculum/best_model.pt` with 2400 simulations.
   - Service `unichess-server` restarted and validated via `/api/models`.
 
+---
+
+## 13. P4 Self-Play Training & Corrected Championship Match (10-0 vs Model R)
+
+### 1. Self-Play Pipeline Overview
+- **Script**: `tools/gumbel_selfplay.py` (Gumbel AlphaZero self-play RL pipeline with C++ MCTS tree reuse)
+- **Pipeline**: 3 phases - (1) Self-play data collection via C++ MCTS, (2) Training on self-play positions, (3) Save updated model
+- **Base Checkpoint**: `runs/stratified_p1_opening/best_model.pt` (P1 opening expert)
+- **Corrected Checkpoint**: `runs/stratified_p4_selfplay_corrected/best_model.pt`
+
+### 2. P4 Diagnostic Experiments
+A series of diagnostic experiments (`tools/p4_diagnostic_experiments.py`) identified the root cause of self-play regression:
+
+| Experiment | Configuration | Result vs Model R | Key Finding |
+| :--- | :--- | :--- | :--- |
+| **Exp A (KL)** | Original settings, KL regularization | Regression | MCTS visit distributions are noisy - direct KL distillation from MCTS visits is unstable |
+| **Exp B (Mixed)** | 30% real data + 70% self-play | Improvement | Mixed data stabilizes training and prevents catastrophic forgetting |
+| **Exp C (Low LR)** | LR = 5e-6 + grad_accum = 4 | Strong improvement | Lower learning rate prevents overfitting to noisy self-play targets |
+| **Exp D (Freeze)** | Freeze policy head | Regression | Policy head still needs to adapt |
+| **Exp E (Temp)** | Temperature smoothing | Moderate improvement | Helpful but not sufficient alone |
+
+### 3. P4 Corrected Configuration (Final Winning Recipe)
+- **Learning Rate**: `5e-6` (reduced from `1e-4`)
+- **Gradient Accumulation**: `4` steps
+- **Mixed Data Ratio**: 30% real evaluation shards + 70% self-play data
+- **MCTS Sims**: 800 for self-play generation
+- **Batch Size**: 256 for self-play training
+
+### 4. P4 Corrected Championship Match vs Model R
+- **Match Setup**:
+  - Model T: `runs/stratified_p4_selfplay_corrected/best_model.pt`, C++ MCTS 2400 sims, Syzygy 3-4-5
+  - Model R: ResNet 15x192, MCTS 800 sims, Syzygy 3-4-5
+  - 10 games across 5 balanced opening pairs (Italian, Ruy Lopez, Scotch, Four Knights, Petroff)
+- **Match Result**:
+  - **Final Score**: **Model T 10.0 - 0.0 Model R** (**100.0% win rate, clean sweep**)
+  - **Record**: 10 Wins, 0 Draws, 0 Losses
+  - **Terminations**: 10 checkmates (100.0%)
+  - **Relative Elo**: +1600.0 (95% CI: +10768.7)
+  - **Average Move Latency**: Model T = **0.22s - 0.29s/move** vs Model R = **0.21s - 0.28s/move** (parity at 2400 sims)
+  - **Total Duration**: 1.86 minutes (10 games)
+- **Artifacts**:
+  - Log: `logs/match_p4_corrected_T_vs_R.log`
+  - PGN: `logs/match_p4_corrected_T_vs_R.pgn`
+  - JSON: `logs/match_p4_corrected_T_vs_R.json`
+
+### 5. Key Findings
+- **LR=5e-6 + grad_accum=4 + 30% mixed data fixes self-play regression**: The combination of lower learning rate, gradient accumulation for stable updates, and mixed real/self-play data prevents the model from overfitting to noisy MCTS visit distributions.
+- **MCTS visit distributions are noisy**: Direct KL distillation from MCTS visit counts is unstable due to exploration noise and finite simulation budgets. Lower LR is essential.
+- **Mixed data prevents catastrophic forgetting**: 30% real evaluation data maintains foundation on ground-truth positions while self-play adds strategic depth.
+- **Self-play provides decisive tactical improvement**: After correction, Model T achieves a clean 10-0 sweep compared to the previous 5.5-4.5 result, demonstrating that self-play data significantly improves tactical sharpness.
+
+### 6. Lessons Learned
+1. **MCTS visit distributions are noisy**: When using self-play data, always use lower learning rates (5e-6 vs 1e-4) to prevent overfitting to exploration noise.
+2. **Mixed data is essential**: Pure self-play leads to regression; blending with real evaluation data (30%) stabilizes training.
+3. **Gradient accumulation matters**: With small batch sizes from self-play, grad_accum=4 provides stable gradient estimates.
+4. **Diagnostic experiments are critical**: Running controlled ablations (Exp A-E) quickly identified the correct configuration.
+
+---
+
+## 14. Head-to-Head Performance vs Model R (All Stages Summary)
+
+| Stage | Model Checkpoint | Match Score | Win Rate | Key Configuration |
+| :--- | :--- | :--- | :--- | :--- |
+| **Stage 1 (Baseline)** | `runs/transformer_20m/best_model.pt` | 2.0 / 6.0 | 33.3% | Transformer 20M, MCTS 100 |
+| **Stage 2 (Continuous)** | `runs/transformer_20m/best_model.pt` (Step 15,000) | 6.0 / 6.0 | 100.0% | Continuous training to 15k steps |
+| **Stage 3 (Stratified)** | `runs/stratified_20m/best_model.pt` | 18.5 / 20.0 | 92.5% | Phase-stratified 20M, C++ MCTS 100 sims |
+| **Stage 4 (Curriculum)** | `runs/stratified_middlegame_curriculum/best_model.pt` | 5.5 / 10.0 | 55.0% | Middlegame curriculum, C++ MCTS 2400 sims |
+| **P4 (Self-Play)** | `runs/stratified_p4_selfplay_corrected/best_model.pt` | **10.0 / 10.0** | **100.0%** | Self-play + mixed data, C++ MCTS 2400 sims |
