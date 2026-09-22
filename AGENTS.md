@@ -147,9 +147,24 @@ High-performance neural chess engine combining Transformer backbones with 2D spa
 - **`config.json` is the routing contract.** The Server loads it from `models/T/config.json`
   (resolved through the symlink) via `models/__init__.py:resolve_kwargs(model_name, arg_name)`,
   and instantiates `engine.py:GameEngine(**kwargs)`.
-  - **`max_mcts` is the only T preset**, and the frontend auto-selects the first preset
-    (`list_presets` returns sorted keys, the UI sets no explicit default). So `max_mcts` is
-    effectively the production route — keep it pointed at the strongest checkpoint.
+  - **Two T presets**: `max_mcts` (production, fully deterministic) and `max_t` (same model /
+    search settings plus an exposed `temperature` key). `list_presets` returns sorted keys and the
+    frontend sets no explicit default, so it auto-selects `max_mcts` — **`max_t` is safe to add
+    only because `"max_mcts" < "max_t"` in sort order.** Any new preset sorting *before*
+    `max_mcts` would silently become the production route.
+  - **`temperature` defaults to 0.0** in `GameEngine.__init__` (`engine.py`), which keeps move
+    choice deterministic (argmax over root visits) and therefore leaves `max_mcts` byte-for-byte
+    unchanged. The three search call sites in `GameEngine.engine_move()` pass `self.temperature`
+    through to both the C++ and Python MCTS paths — they were previously hardcoded to `0.0`.
+    `max_t` ships at `0.0` too; raise it there (and restart) to enable variety.
+  - Sampling draws on the **root visit distribution** `N ** (1/t)`, not the raw policy, so with
+    2400 sims the distribution is peaked: `t ≈ 1.0` gives real variety, `t ≈ 0.5` is still close to
+    greedy. The C++ path ignores `t <= 0.01` (greedy branch) and the Python path ignores `t <= 0`.
+  - Temperature is **not** in the `get_shared_engine` cache key, which is correct on the Server
+    path (it is a per-`search()` argument). Do not push it down into the shared `TransformerEngine`
+    without adding it to that key, or two presets will alias onto one cached engine.
+  - Priority-4 raw-network fallback (`_from_network`) still uses the shared engine's own
+    temperature (`0.0`), so it stays deterministic; it is only reached if both MCTS paths fail.
   - **All paths in `config.json` must be absolute.** The T engine passes paths straight to
     `Path()`/`torch.load()`, so a relative path resolves against the Server's
     `WorkingDirectory` (`~/UniChess/Server`) and fails. Unlike the R engine, which rebases

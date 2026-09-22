@@ -7,5 +7,15 @@
     "precision": "fp16",
     "syzygy_path": "/home/jeefy/UniChess/data/raw/syzygy345",
     "description": "UniChess-Stratified P4 Self-Play 20M (Max MCTS 2400, 10-0 vs Model R)"
+  },
+  "max_t": {
+    "ckpt": "/home/jeefy/UniChess/Transformer/runs/stratified_p4_selfplay_corrected/best_model.pt",
+    "mcts_sims": 2400,
+    "mcts_batch": 64,
+    "device": "cuda",
+    "precision": "fp16",
+    "syzygy_path": "/home/jeefy/UniChess/data/raw/syzygy345",
+    "temperature": 0.0,
+    "description": "UniChess-Stratified P4 Self-Play 20M (Max MCTS 2400 + temperature knob, ships at 0.0 = deterministic)"
   }
 }

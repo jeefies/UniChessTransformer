@@ -214,8 +214,33 @@ Move selection priority in `engine.py:engine_move()`:
 3. MCTS search (C++ with Syzygy, else Python fallback)
 4. Raw network policy
 
+### 7.1 Temperature
+
+`TransformerEngine` carries a `temperature` (default `0.0`) that selects how the root move is
+drawn from the finished search:
+
+$$p_i = \frac{N_i^{(1/t)}}{\sum_j N_j^{(1/t)}}$$
+
+over root **visit counts** (not the raw policy). `t <= 0` (C++: `t <= 0.01`) means greedy argmax
+over `N`. Sampling is seeded from OS entropy on the Server path, so `t > 0` genuinely varies.
+
+The Server-facing `GameEngine` exposes the same knob as a named constructor argument and
+threads it into all three search call sites (C++ `search`, `MCTSConfig`, `best_move`).
+Presets that omit the key inherit the `0.0` code default and therefore remain fully
+deterministic.
+
+### 7.2 Presets
+
 The Server discovers this repository through the symlink
 `~/UniChess/Server/models/T -> ~/UniChess/Transformer` and reads presets from
 `config.json`. Because the T engine resolves paths directly (no repo-root rebasing), **all paths
-in `config.json` must be absolute**. The single preset `max_mcts` is also the frontend default,
-since the UI selects the first preset returned by `list_presets()`.
+in `config.json` must be absolute**.
+
+| Preset | Sims | Batch | Temp | Role |
+| :--- | :--- | :--- | :--- | :--- |
+| `max_mcts` | 2400 | 64 | (0.0 default) | Production route — fully deterministic |
+| `max_t` | 2400 | 64 | 0.0 (exposed) | Same model/search; knob surfaced for tuning |
+
+The UI sets no explicit preset default and selects the first option, which is the first of
+`list_presets()` (sorted). Because `"max_mcts" < "max_t"`, `max_mcts` stays the default — **any
+new preset sorting before `max_mcts` would silently become the production route.**

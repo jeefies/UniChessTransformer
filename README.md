@@ -45,10 +45,11 @@ Further reading: [`docs/architecture.md`](docs/architecture.md) for the architec
   - Current best: `runs/stratified_p4_selfplay_corrected/best_model.pt`.
 
 - **Standards & Server Integration**
-  - Full UCI protocol compliance (`uci.py`).
+  - Full UCI protocol compliance (`uci.py`), including `setoption temperature`.
   - Server integration via symlink: `/home/jeefy/UniChess/Server/models/T -> /home/jeefy/UniChess/Transformer`.
-  - Presets in `config.json` drive the Server's model selection; the single `max_mcts` preset is
-    the frontend default. **All paths in `config.json` must be absolute** — unlike the R engine,
+  - Presets in `config.json` drive the Server's model selection. `max_mcts` is the frontend
+    default (fully deterministic); `max_t` is identical plus an exposed `temperature` key,
+    which ships at `0.0`. **All paths in `config.json` must be absolute** — unlike the R engine,
     the T engine does not rebase relative paths against its repo root.
   - Production service is the systemd user unit `unichess-server`.
 

@@ -66,7 +66,13 @@ def get_shared_engine(
 
 
 class GameEngine:
-    """GameEngine adapter for UniChess Server."""
+    """GameEngine adapter for UniChess Server.
+
+    Temperature (root move-choice sampling) is optional and defaults to 0.0,
+    which keeps the engine fully deterministic (argmax over root visits) and
+    therefore preserves the strength and reproducibility of presets that do not
+    set it explicitly.
+    """
 
     def __init__(
         self,
@@ -78,6 +84,7 @@ class GameEngine:
         precision: str = "fp16",
         syzygy_path: str | None = None,
         book_path: str | None = None,
+        temperature: float = 0.0,
         **kwargs: Any,
     ):
         self.ckpt = ckpt
@@ -88,6 +95,8 @@ class GameEngine:
         self.precision = precision
         self.syzygy_path = syzygy_path
         self.book_path = book_path
+        # <= 0 keeps the deterministic argmax behaviour.
+        self.temperature = max(0.0, float(temperature))
         self.extra_kwargs = kwargs
 
         self.engine = get_shared_engine(
@@ -150,7 +159,7 @@ class GameEngine:
                         self.engine.evaluate_tensor,
                         simulations=self.mcts_sims,
                         batch_size=self.mcts_batch,
-                        temperature=0.0,
+                        temperature=self.temperature,
                         syzygy_path=self.syzygy_path,
                     )
                     if move_str:
@@ -165,7 +174,7 @@ class GameEngine:
                 mcts_cfg = MCTSConfig(
                     simulations=self.mcts_sims,
                     batch_size=self.mcts_batch,
-                    temperature=0.0,
+                    temperature=self.temperature,
                 )
                 mcts = MCTS(
                     self.engine.evaluate_batch,
@@ -176,7 +185,7 @@ class GameEngine:
                 mv, self.root = mcts.best_move(
                     self.board,
                     simulations=self.mcts_sims,
-                    temperature=0.0,
+                    temperature=self.temperature,
                     root=self.root,
                 )
 
