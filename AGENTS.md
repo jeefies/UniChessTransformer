@@ -35,7 +35,7 @@ High-performance neural chess engine combining Transformer backbones with 2D spa
   ```
 - **Launch Training**:
   ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python -u train/train.py \
+  /home/jeefy/miniconda3/envs/unichess/bin/python -u unichess_t/train/train.py \
     --preset stratified_20m \
     --data-dir /home/jeefy/UniChess/data/shards_evals \
     --checkpoint-dir runs/stratified_20m \
@@ -85,7 +85,7 @@ High-performance neural chess engine combining Transformer backbones with 2D spa
 - Lightweight presets: `transformer_tiny` (~3.8M), `transformer_small` (~6.7M), `transformer_medium` (~18.5M), `transformer_large` (~35.1M).
 
 ### Key Architectural Invariants
-- **Input Encoding (`core/encoding.py`)**: Canonical `(19, 8, 8)` float32 representation, oriented to the side to move (mirrored if Black to move).
+- **Input Encoding (`unichess_t/core/encoding.py`)**: Canonical `(19, 8, 8)` float32 representation, oriented to the side to move (mirrored if Black to move).
 - **ConvStem + Tokens**: 3x3 Conv maps $(19, 8, 8) \to (d_{\text{model}}, 8, 8)$, flattened to 64 square tokens + 1 prepended `[CLS]` token (total 65 tokens). Decoupled learned 2D rank and file embeddings are added.
 - **SDPA Relative Position Bias**: Pairwise $(12, 64, 64)$ square-to-square attention bias is padded with zeros for `[CLS]` to $(1, 12, 65, 65)$ and passed directly into `F.scaled_dot_product_attention(..., attn_mask=attn_bias)` to leverage fused FlashAttention/SDPA kernels. Do not mutate attention matrices in-place with slicing.
 - **Bilinear Policy Head**: Projects 64 squares to queries $Q$ and keys $K$, computing move logits via $(Q K^T) / \sqrt{d_p} + \text{bias}_{\text{move}} \in \mathbb{R}^{B \times 64 \times 64}$, flattened to $(B, 4096)$. Decoupled promotion head predicts $(Q, R, B, N)$ for promotions.
@@ -93,20 +93,20 @@ High-performance neural chess engine combining Transformer backbones with 2D spa
 - **Moves-Left Head (MLH)**: Auxiliary MLP on the `[CLS]` token — `Linear(d_model, 64) -> SiLU -> Linear(64, 1)` — predicting moves remaining. Enabled via `return_mlh=True`; trained with Smooth-L1 (`mlh_weight=0.05`). Present in every expert since Stage P3. **Checkpoints predating P3 lack `mlh_head` keys and fail to load** against the current `StratifiedChessTransformer`.
 - **Stratified checkpoint aliasing**: `StratifiedChessTransformer` registers `self.experts = nn.ModuleList([self.opening, self.middlegame, self.endgame])`, so saved state dicts contain *both* `opening/middlegame/endgame.*` and `experts.0/1/2.*` keys for the same modules. Counting raw state-dict entries therefore over-reports params ~2x; the real `stratified_20m` count is **61,031,064**.
 
-### Dataset & Records (`model/dataset.py`)
+### Dataset & Records (`unichess_t/model/dataset.py`)
 - Shards are 96-byte structured binary records (`RECORD_DTYPE`) located at `/home/jeefy/UniChess/data/shards_evals/evals_*.bin` (symlinked to `/home/jeefy/UniChess/ResNet/data/shards_evals`).
 - Memory-mapped reading (`np.memmap`) with vectorized bitboard decoding on batches.
 
 ### MCTS Search Engines
-- **C++ MCTS Integration (`search/cpp/`)**:
+- **C++ MCTS Integration (`unichess_t/search/cpp/`)**:
   - High-performance C++ PyBind11 MCTS extension delivering **6,155+ sims/sec** batched tree search.
   - Native leaf-level Syzygy 3-4-5 tablebase probing: positions with $\le 5$ pieces are probed directly during tree traversal, returning exact game-theoretic values without neural network evaluation.
-  - Python MCTS fallback: seamlessly falls back to Python batched MCTS (`search/mcts.py`) if C++ extension compilation/loading is unavailable.
-- **Stage P2 search features** (`search/cpp/mcts.hpp`, `mcts_pybind.cpp`):
+  - Python MCTS fallback: seamlessly falls back to Python batched MCTS (`unichess_t/search/mcts.py`) if C++ extension compilation/loading is unavailable.
+- **Stage P2 search features** (`unichess_t/search/cpp/mcts.hpp`, `mcts_pybind.cpp`):
   - **Tree reuse** (`reuse`): after the opponent replies, descends the retained subtree via `reuse_root(move_uci)` instead of rebuilding, reusing all prior visit counts.
   - **Dynamic FPU** (`c_fpu`, default 0.5): first-play urgency is `parent_q - c_fpu * sqrt(1/(1 + parent_visits))` via `compute_fpu_q`, replacing the old fixed `fpu_reduction = 0.2`.
   - **Contempt** (`contempt`): biases root draws by `contempt / (1 + root_N)` during backup to discourage premature draw acceptance; `0.0` disables.
-- **Multi-Process Parallel MCTS (`search/parallel_mcts.py`)**: Lock-free worker processes communicating with central GPU batched evaluator; peaks at **8,820 sims/sec** (16 workers, batch 64).
+- **Multi-Process Parallel MCTS (`unichess_t/search/parallel_mcts.py`)**: Lock-free worker processes communicating with central GPU batched evaluator; peaks at **8,820 sims/sec** (16 workers, batch 64).
 
 ### Head-to-Head Performance vs Model R
 - **Match Result**: Model T won **10-0** against Model R (`chess_ai` / ResNet 15x192) in a 10-game P4 self-play corrected championship match across 5 balanced opening pairs.
@@ -191,3 +191,9 @@ High-performance neural chess engine combining Transformer backbones with 2D spa
       print(resolve_kwargs('T', list_presets('T')[0])['ckpt'])"
     /home/jeefy/UniChess/Transformer/runs/stratified_p4_selfplay_corrected/best_model.pt
     ```
+
+## Package layout & UniChessKit
+
+Library code lives in the `unichess_t` package (`core/ engine/ model/ search/ train/`); `eval/`, `tools/`, `tests/` stay at the repo root as scripts. The package name keeps T and ResNet (`unichess_r`) from colliding on `core`/`model`/`search` when both are loaded in one process (Server, batch arenas).
+
+Batch arenas / self-play go through UniChessKit (`jeefies/UniChessKit`): `unichess_t/kit_adapter.py:make_player_factory` wraps `TransformerEngine.evaluate_batch` as a kit `BatchEvaluator`; search is the kit's PUCT with cross-game batching (the C++ MCTS is not used on that path). Example: `python -m unichess_kit.match match.json --out runs/<name>/results.jsonl`.

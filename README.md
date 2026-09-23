@@ -27,14 +27,14 @@ Further reading: [`docs/architecture.md`](docs/architecture.md) for the architec
   - **`transformer_50m`** — 49,757,960 params, 17 layers, $d=512$, 16 heads, $d_{\text{ff}}=1160$.
   - Lightweight presets: `transformer_tiny` (3.8M), `transformer_small` (6.7M), `transformer_medium` (18.5M), `transformer_large` (35.1M).
 
-- **C++ Accelerated MCTS (`search/cpp/`)** — production search path
+- **C++ Accelerated MCTS (`unichess_t/search/cpp/`)** — production search path
   - PyBind11 extension delivering **6,155+ sims/sec** of batched tree search.
   - **Native leaf-level Syzygy probing**: nodes with $\le 5$ pieces are probed against the 3-4-5 tablebases during traversal, returning exact game-theoretic values with no neural evaluation.
   - **Tree reuse** (Stage P2): descends the retained subtree after the opponent's reply, reusing visit counts.
   - **Dynamic FPU** (Stage P2): `parent_q - c_fpu * sqrt(1/(1 + parent_visits))` replaces the fixed first-play-urgency reduction.
   - **Contempt** (Stage P2): biases root draws by `contempt / (1 + root_N)` to discourage premature draws.
-  - **Python fallback**: `search/mcts.py` (batched PUCT, virtual loss, Dirichlet noise) takes over automatically if the C++ extension is unavailable.
-  - **Multi-process parallel MCTS** (`search/parallel_mcts.py`): lock-free workers over a central GPU evaluator, peaking at **8,820 sims/sec** (16 workers, batch 64).
+  - **Python fallback**: `unichess_t/search/mcts.py` (batched PUCT, virtual loss, Dirichlet noise) takes over automatically if the C++ extension is unavailable.
+  - **Multi-process parallel MCTS** (`unichess_t/search/parallel_mcts.py`): lock-free workers over a central GPU evaluator, peaking at **8,820 sims/sec** (16 workers, batch 64).
 
 - **Training & Curriculum Learning**
   - Distillation from Stockfish evaluations with joint policy cross-entropy + WDL loss (+ MLH since P3).
@@ -223,7 +223,7 @@ exports) are git-ignored.
 ### Training
 
 ```bash
-/home/jeefy/miniconda3/envs/unichess/bin/python -u train/train.py \
+/home/jeefy/miniconda3/envs/unichess/bin/python -u unichess_t/train/train.py \
   --preset stratified_20m \
   --data-dir /home/jeefy/UniChess/data/shards_evals \
   --checkpoint-dir runs/stratified_20m \
