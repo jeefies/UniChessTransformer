@@ -109,7 +109,7 @@ public:
 
         py::object callable_fn = obj;
         if (py::hasattr(obj, "probe_wdl") || py::isinstance<py::str>(obj)) {
-            py::object search_cpp = py::module_::import("search.cpp");
+            py::object search_cpp = py::module_::import("unichess_t.search.cpp");
             callable_fn = search_cpp.attr("make_syzygy_probe")(obj);
         }
 
