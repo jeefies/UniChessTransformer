@@ -48,9 +48,11 @@ Further reading: [`docs/architecture.md`](docs/architecture.md) for the architec
   - Full UCI protocol compliance (`uci.py`), including `setoption temperature`.
   - Server integration via symlink: `/home/jeefy/UniChess/Server/models/T -> /home/jeefy/UniChess/Transformer`.
   - Presets in `config.json` drive the Server's model selection. `max_mcts` is the frontend
-    default (fully deterministic); `max_t` is identical plus an exposed `temperature` key,
-    which ships at `0.0`. **All paths in `config.json` must be absolute** — unlike the R engine,
-    the T engine does not rebase relative paths against its repo root.
+    default (fully deterministic); `max_t` is identical plus `temperature=1.0` +
+    `root_top_k=3` for game-to-game variety with a quality guard — it samples the root visit
+    distribution restricted to the 3 most-visited moves, so it can never pick a move worse
+    ranked than its 3rd root move. **All paths in `config.json` must be absolute** — unlike the
+    R engine, the T engine does not rebase relative paths against its repo root.
   - Production service is the systemd user unit `unichess-server`.
 
 ---

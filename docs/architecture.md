@@ -16,7 +16,7 @@ history see [`experiments.md`](experiments.md); for build/run commands see the r
 ## 2. Model Hierarchy & Tiers
 
 Parameter counts below are measured, not estimated (verified against the current
-`model/transformer.py`).
+`unichess_t/model/transformer.py`).
 
 | Preset | Layers | $d_{\text{model}}$ | Heads | $d_{\text{ff}}$ | Params (measured) | Primary Role |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -34,7 +34,7 @@ approximately 3 x 20.3M, confirming that the three experts hold the bulk of the 
 > **Checkpoint note:** a saved `stratified_20m` state dict contains *both* `opening.*` /
 > `middlegame.*` / `endgame.*` keys **and** `experts.0/1/2.*` keys. These are aliases of the
 > same modules (`self.experts = nn.ModuleList([self.opening, self.middlegame, self.endgame])`,
-> `model/transformer.py:316`), so counting raw state-dict entries yields ~122M — roughly double
+> `unichess_t/model/transformer.py:316`), so counting raw state-dict entries yields ~122M — roughly double
 > the real 61.0M parameter count. The loader (`_load_state_dict`) tolerates either naming.
 
 ---
@@ -100,13 +100,13 @@ The scalar evaluation used by search is $Q = P(\text{Win}) - P(\text{Loss}) \in 
 ### 3.5 Moves-Left Head (MLH, added in Stage P3)
 
 An optional auxiliary head predicts the number of moves remaining until game end, from a
-two-layer MLP on the `[CLS]` token (`model/transformer.py:220`):
+two-layer MLP on the `[CLS]` token (`unichess_t/model/transformer.py:220`):
 
 $$\hat{m} = \text{Linear}_{64 \to 1}\big(\text{SiLU}(\text{Linear}_{d \to 64}(\mathbf{h}_{\text{CLS}}))\big)$$
 
 - Activated via `return_mlh=True` in the forward pass.
 - Trained with Smooth-L1 loss against pseudo moves-left targets derived from the evaluation
-  shards (`model/loss.py`, `mlh_weight = 0.05`).
+  shards (`unichess_t/model/loss.py`, `mlh_weight = 0.05`).
 - Present in every expert since Stage P3. **Checkpoints predating P3 lack `mlh_head` keys and
   cannot be loaded by the current architecture** — see the compatibility note in
   [`experiments.md`](experiments.md) §1.
@@ -135,7 +135,7 @@ other experts if MLH weights are absent, so mixed-age checkpoints stay loadable.
 
 ## 5. Search Engines
 
-### 5.1 C++ MCTS (`search/cpp/`) — production path
+### 5.1 C++ MCTS (`unichess_t/search/cpp/`) — production path
 
 A PyBind11 extension (`mcts_pybind.cpp` binding `mcts.hpp` + `chess_board.hpp`) providing
 batched PUCT tree search at **6,155+ sims/sec** on the reference GPU.
@@ -156,13 +156,13 @@ batched PUCT tree search at **6,155+ sims/sec** on the reference GPU.
 | **Dynamic FPU** | `c_fpu` (default 0.5) | First-play urgency for unvisited children is computed as `parent_q - c_fpu * sqrt(1 / (1 + parent_visits))` (`compute_fpu_q`, `mcts.hpp:114`), replacing the old fixed `fpu_reduction = 0.2`. |
 | **Contempt** | `contempt` (float) | Draws seen from the root are biased by `contempt / (1 + root_N)` during backup, discouraging premature draw acceptance. Zero disables it. |
 
-### 5.2 Python MCTS (`search/mcts.py`) — fallback
+### 5.2 Python MCTS (`unichess_t/search/mcts.py`) — fallback
 
 Batched PUCT search with virtual loss and Dirichlet noise. Used automatically when the C++
 extension is not compiled or fails to load, and by the Python-side API. Also exposes
 `MCTS.advance_root(root, move)` for tree reuse on the Python path.
 
-### 5.3 Multi-Process Parallel MCTS (`search/parallel_mcts.py`)
+### 5.3 Multi-Process Parallel MCTS (`unichess_t/search/parallel_mcts.py`)
 
 Lock-free CPU worker processes feeding a central GPU batched evaluator over
 `multiprocessing.Queue` / `Pipe` channels. Peaks at **8,820 sims/sec** with 16 workers and batch
@@ -201,7 +201,7 @@ scaling sweep.
 
 ## 7. Engine & Server Contract
 
-`engine/engine.py` (`TransformerEngine`) wraps model + search + tablebase + opening book and is
+`unichess_t/engine/engine.py` (`TransformerEngine`) wraps model + search + tablebase + opening book and is
 the shared inference entry point. The root `engine.py` adapts it to the UniChess Server
 `GameEngine` contract, caching one engine per
 `(ckpt, device, precision, syzygy_path, use_cpp_mcts, book_path)` so concurrent sessions share
@@ -214,7 +214,7 @@ Move selection priority in `engine.py:engine_move()`:
 3. MCTS search (C++ with Syzygy, else Python fallback)
 4. Raw network policy
 
-### 7.1 Temperature
+### 7.1 Temperature and root narrowing
 
 `TransformerEngine` carries a `temperature` (default `0.0`) that selects how the root move is
 drawn from the finished search:
@@ -222,12 +222,29 @@ drawn from the finished search:
 $$p_i = \frac{N_i^{(1/t)}}{\sum_j N_j^{(1/t)}}$$
 
 over root **visit counts** (not the raw policy). `t <= 0` (C++: `t <= 0.01`) means greedy argmax
-over `N`. Sampling is seeded from OS entropy on the Server path, so `t > 0` genuinely varies.
+over `N`; `t == 1` is proportional to visits; `t < 1` sharpens; `t > 1` flattens *past* the visit
+distribution and is **clamped to 1.0** by `GameEngine._clamp_temperature()` with a one-time
+warning. Sampling is seeded from OS entropy on the Server path, so `t > 0` genuinely varies.
 
-The Server-facing `GameEngine` exposes the same knob as a named constructor argument and
-threads it into all three search call sites (C++ `search`, `MCTSConfig`, `best_move`).
-Presets that omit the key inherit the `0.0` code default and therefore remain fully
-deterministic.
+The Server-facing `GameEngine` owns the sampling in `_select_root_move()` rather than pushing a
+non-zero temperature into the search. It always asks the C++ search for a **greedy** move plus the
+root visit dict (`metrics["policy"]`, already returned by `mcts_pybind.cpp`), then samples that
+dict itself with `root_top_k` narrowing. This keeps the search deterministic and bounds variety:
+T can never select a move worse ranked than its K-th root move.
+
+| Setting | Mean SF rank | Median | Outside SF top-5 |
+| :--- | :--- | :--- | :--- |
+| R (800 sims, greedy) | 1.60 | 1.0 | 0 % |
+| T (2400 sims), old `t=1.5`, no narrowing | 5.60 | 2.0 | 30 % |
+| T (2400 sims), **`t=1.0` + `root_top_k=3`** | **2.95** | 1.0 | 20 % |
+
+*Measured on 40 moves/config against Stockfish 19 with `Threads: 1` at 30k nodes —
+`Threads > 1` is **not** reproducible at a fixed node budget.* The old path was strictly
+harmful over-flattening, not a capability deficit: greedy T is at parity with R.
+
+Presets that omit `temperature` inherit the `0.0` code default and therefore remain fully
+deterministic. `root_top_k` defaults to `0` (no cap); the shipped `max_t` pair gives 5/5 distinct
+games vs M6 over 24 plies, diverging from ply 1.
 
 ### 7.2 Presets
 
@@ -236,10 +253,10 @@ The Server discovers this repository through the symlink
 `config.json`. Because the T engine resolves paths directly (no repo-root rebasing), **all paths
 in `config.json` must be absolute**.
 
-| Preset | Sims | Batch | Temp | Role |
-| :--- | :--- | :--- | :--- | :--- |
-| `max_mcts` | 2400 | 64 | (0.0 default) | Production route — fully deterministic |
-| `max_t` | 2400 | 64 | 0.0 (exposed) | Same model/search; knob surfaced for tuning |
+| Preset | Sims | Batch | Temp | Top-K | Role |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `max_mcts` | 2400 | 64 | (0.0 default) | (0 default) | Production route — fully deterministic |
+| `max_t` | 2400 | 64 | 1.0 | 3 | Same model/search; sampled variety with a quality guard |
 
 The UI sets no explicit preset default and selects the first option, which is the first of
 `list_presets()` (sorted). Because `"max_mcts" < "max_t"`, `max_mcts` stays the default — **any

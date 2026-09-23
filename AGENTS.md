@@ -154,24 +154,37 @@ High-performance neural chess engine combining Transformer backbones with 2D spa
     `max_mcts` would silently become the production route.
   - **`temperature` defaults to 0.0** in `GameEngine.__init__` (`engine.py`), which keeps move
     choice deterministic (argmax over root visits) and therefore leaves `max_mcts` byte-for-byte
-    unchanged. The three search call sites in `GameEngine.engine_move()` pass `self.temperature`
-    through to both the C++ and Python MCTS paths — they were previously hardcoded to `0.0`.
-    `max_t` ships at **1.5**; lower it there (and restart) to restore determinism.
-  - Sampling draws on the **root visit distribution** `N ** (1/t)`, not the raw policy, so with
-    2400 sims the distribution is peaked: `t ≈ 1.0` gives real variety, `t ≈ 0.5` is still close to
-    greedy. The C++ path ignores `t <= 0.01` (greedy branch) and the Python path ignores `t <= 0`.
-  - Measured against M6 (6 full games each, T at 2400 sims), `max_t` settings:
-
-    | `temperature` | distinct games | first divergence | T's score | avg material for T |
-    | :--- | :--- | :--- | :--- | :--- |
-    | 0.0 | 1/5 | never (identical) | — | — |
-    | 1.0 | 5/5 | ply 3 | 6.0/6 | +12.5 |
-    | 1.5 | 5/5 | ply 1 | 6.0/6 | +13.3 |
-    | 2.0 | 5/5 | ply 1 | 6.0/6 | +11.8 |
-
-    Root-move spread over 20 fresh searches: `t=1.0` keeps the same first move 16/20 times at the
-    start position, `t=1.5` 13/20, `t=2.0` 6/20. So raise `t` above 1.5 if the opening itself must
-    vary too. Cost against a weak opponent is negligible; against a peer, budget accordingly.
+    unchanged. `max_t` ships at **`temperature=1.0` + `root_top_k=3`**; set either back to `0`
+    (and restart) to restore determinism.
+  - **Sampling semantics (measured, not assumed).** Root move choice samples the **visit
+    distribution** `N ** (1/t)`. `t <= 0` → greedy argmax, `t == 1` → proportional to visits,
+    `t < 1` → sharper than visits. `t > 1` is **clamped to 1.0** with a one-time warning, because
+    flattening *past* the visit distribution is strictly harmful (see the table below).
+  - **`root_top_k` is the quality guard.** After a greedy search, `GameEngine.engine_move()`
+    reads `metrics["policy"]` (the `{uci: visits}` dict the C++ search already returns) and does
+    the sampling itself, restricted to the `root_top_k` most-visited root moves. This bounds the
+    damage: T can never pick a move ranked worse than its K-th root move. Set `root_top_k=1` (or
+    `temperature=0`) for deterministic play.
+  - **Root cause of the 2026-09 "T weaker than R at temperature" report.** An earlier `max_t`
+    shipped at `t=1.5` with no narrowing. On 40 moves/config with a *reproducible* Stockfish 19
+    reference (`Threads: 1`, 30k nodes) T degraded to mean SF rank **5.60** versus R's **1.60**
+    (30% of moves outside SF's top-5). The same setting after the fix is **2.95**. Greedy T
+    (t=0) is at parity with R, so the regression was pure over-flattening, **not** a model
+    capability deficit.
+    | path | mean SF rank | median | outside SF top-5 |
+    | :--- | :--- | :--- | :--- |
+    | R 800 sims greedy | 1.60 | 1.0 | 0% |
+    | T 2400 sims, old t=1.5, no narrowing | 5.60 | 2.0 | 30% |
+    | T 2400 sims, **t=1.0 + `root_top_k=3`** | **2.95** | 1.0 | 20% |
+    A residual gap to R remains; lower `temperature` (e.g. 0.7 with `root_top_k=3`) to trade
+    variety back for strength.
+  - **Game-to-game variety** with the shipped setting is 5/5 distinct games vs M6 over 5 games
+    (24 plies), diverging from ply 1. A deterministic reference is required to measure this
+    reliably: Stockfish with `Threads > 1` is **not** reproducible at a fixed node budget, which
+    silently invalidated two earlier measurements in this session.
+  - Root move choice is sampled in `GameEngine._select_root_move()` (`engine.py`); the C++
+    `temperature=` argument is now passed `0.0` from the wrapper so the search itself stays
+    greedy and deterministic.
   - Temperature is **not** in the `get_shared_engine` cache key, which is correct on the Server
     path (it is a per-`search()` argument). Do not push it down into the shared `TransformerEngine`
     without adding it to that key, or two presets will alias onto one cached engine.
