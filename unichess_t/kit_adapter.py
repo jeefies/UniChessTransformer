@@ -25,7 +25,8 @@ DEFAULT_CKPT = ROOT / "runs" / "transformer_20m" / "best_model.pt"
 # config.json 预设里与搜索相关的键 → make_player_factory 参数
 _PRESET_KEYS = {"ckpt": "checkpoint", "mcts_sims": "simulations", "mcts_batch": "batch_size",
                 "device": "device", "precision": "precision", "syzygy_path": "syzygy_path",
-                "book_path": "book_path", "temperature": "temperature"}
+                "book_path": "book_path", "temperature": "temperature",
+                "root_top_k": "root_top_k"}
 
 
 def load_preset(name: str) -> dict:
