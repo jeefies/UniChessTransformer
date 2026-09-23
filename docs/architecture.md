@@ -214,7 +214,7 @@ Move selection priority in `engine.py:engine_move()`:
 3. MCTS search (C++ with Syzygy, else Python fallback)
 4. Raw network policy
 
-### 7.1 Temperature
+### 7.1 Temperature and root narrowing
 
 `TransformerEngine` carries a `temperature` (default `0.0`) that selects how the root move is
 drawn from the finished search:
@@ -222,12 +222,29 @@ drawn from the finished search:
 $$p_i = \frac{N_i^{(1/t)}}{\sum_j N_j^{(1/t)}}$$
 
 over root **visit counts** (not the raw policy). `t <= 0` (C++: `t <= 0.01`) means greedy argmax
-over `N`. Sampling is seeded from OS entropy on the Server path, so `t > 0` genuinely varies.
+over `N`; `t == 1` is proportional to visits; `t < 1` sharpens; `t > 1` flattens *past* the visit
+distribution and is **clamped to 1.0** by `GameEngine._clamp_temperature()` with a one-time
+warning. Sampling is seeded from OS entropy on the Server path, so `t > 0` genuinely varies.
 
-The Server-facing `GameEngine` exposes the same knob as a named constructor argument and
-threads it into all three search call sites (C++ `search`, `MCTSConfig`, `best_move`).
-Presets that omit the key inherit the `0.0` code default and therefore remain fully
-deterministic.
+The Server-facing `GameEngine` owns the sampling in `_select_root_move()` rather than pushing a
+non-zero temperature into the search. It always asks the C++ search for a **greedy** move plus the
+root visit dict (`metrics["policy"]`, already returned by `mcts_pybind.cpp`), then samples that
+dict itself with `root_top_k` narrowing. This keeps the search deterministic and bounds variety:
+T can never select a move worse ranked than its K-th root move.
+
+| Setting | Mean SF rank | Median | Outside SF top-5 |
+| :--- | :--- | :--- | :--- |
+| R (800 sims, greedy) | 1.60 | 1.0 | 0 % |
+| T (2400 sims), old `t=1.5`, no narrowing | 5.60 | 2.0 | 30 % |
+| T (2400 sims), **`t=1.0` + `root_top_k=3`** | **2.95** | 1.0 | 20 % |
+
+*Measured on 40 moves/config against Stockfish 19 with `Threads: 1` at 30k nodes —
+`Threads > 1` is **not** reproducible at a fixed node budget.* The old path was strictly
+harmful over-flattening, not a capability deficit: greedy T is at parity with R.
+
+Presets that omit `temperature` inherit the `0.0` code default and therefore remain fully
+deterministic. `root_top_k` defaults to `0` (no cap); the shipped `max_t` pair gives 5/5 distinct
+games vs M6 over 24 plies, diverging from ply 1.
 
 ### 7.2 Presets
 
@@ -236,10 +253,10 @@ The Server discovers this repository through the symlink
 `config.json`. Because the T engine resolves paths directly (no repo-root rebasing), **all paths
 in `config.json` must be absolute**.
 
-| Preset | Sims | Batch | Temp | Role |
-| :--- | :--- | :--- | :--- | :--- |
-| `max_mcts` | 2400 | 64 | (0.0 default) | Production route — fully deterministic |
-| `max_t` | 2400 | 64 | 0.0 (exposed) | Same model/search; knob surfaced for tuning |
+| Preset | Sims | Batch | Temp | Top-K | Role |
+| :--- | :--- | :--- | :--- | :--- | :--- |
+| `max_mcts` | 2400 | 64 | (0.0 default) | (0 default) | Production route — fully deterministic |
+| `max_t` | 2400 | 64 | 1.0 | 3 | Same model/search; sampled variety with a quality guard |
 
 The UI sets no explicit preset default and selects the first option, which is the first of
 `list_presets()` (sorted). Because `"max_mcts" < "max_t"`, `max_mcts` stays the default — **any

@@ -15,7 +15,8 @@
     "device": "cuda",
     "precision": "fp16",
     "syzygy_path": "/home/jeefy/UniChess/data/raw/syzygy345",
-    "temperature": 1.5,
-    "description": "UniChess-Stratified P4 Self-Play 20M (Max MCTS 2400 + temperature 1.5 for game-to-game variety)"
+    "temperature": 1.0,
+    "root_top_k": 3,
+    "description": "UniChess-Stratified P4 Self-Play 20M (Max MCTS 2400 + temperature 1.0 with top-3 root narrowing)"
   }
 }
