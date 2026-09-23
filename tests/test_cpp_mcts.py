@@ -161,6 +161,25 @@ def test_terminal_states_and_edge_cases():
     print("PASS: Terminal States & Edge Cases")
 
 
+def test_syzygy_path_resolves_probe():
+    """syzygy_path 为字符串时 C++ 侧回调 Python 构造探测函数；模块名写错会让 Server 静默回退到 Python MCTS。"""
+    import tempfile
+    print("--- Running Syzygy Path Probe Resolution Test ---")
+    engine = load_cpp_mcts()()
+
+    def dummy_eval(tensor):
+        b = tensor.shape[0]
+        wdl = torch.tensor([[0.33, 0.34, 0.33]], dtype=torch.float32).repeat(b, 1)
+        return torch.full((b, 4096), 1 / 4096), torch.full((b, 4), 0.25), wdl
+
+    with tempfile.TemporaryDirectory() as empty_tb:
+        best_move, metrics = engine.search("8/8/8/4k3/8/8/4K3/4R3 w - - 0 1", dummy_eval,
+                                           simulations=16, batch_size=4, syzygy_path=empty_tb)
+    assert best_move, "search with syzygy_path returned no move"
+    assert metrics["visits"] == 16
+    print("PASS: Syzygy Path Probe Resolution")
+
+
 def test_memory_and_stability_stress():
     print("--- Running Memory & Stability Stress Test (100 searches) ---")
     MCTSCpp = load_cpp_mcts()
@@ -228,6 +247,7 @@ if __name__ == "__main__":
     test_move_legality_and_parity()
     test_19plane_encoding_parity()
     test_terminal_states_and_edge_cases()
+    test_syzygy_path_resolves_probe()
     test_memory_and_stability_stress()
     test_invariants_and_policy_validity()
     print("\nALL C++ MCTS TESTS PASSED SUCCESSFULLY!")
