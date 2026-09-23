@@ -156,10 +156,22 @@ High-performance neural chess engine combining Transformer backbones with 2D spa
     choice deterministic (argmax over root visits) and therefore leaves `max_mcts` byte-for-byte
     unchanged. The three search call sites in `GameEngine.engine_move()` pass `self.temperature`
     through to both the C++ and Python MCTS paths — they were previously hardcoded to `0.0`.
-    `max_t` ships at `0.0` too; raise it there (and restart) to enable variety.
+    `max_t` ships at **1.5**; lower it there (and restart) to restore determinism.
   - Sampling draws on the **root visit distribution** `N ** (1/t)`, not the raw policy, so with
     2400 sims the distribution is peaked: `t ≈ 1.0` gives real variety, `t ≈ 0.5` is still close to
     greedy. The C++ path ignores `t <= 0.01` (greedy branch) and the Python path ignores `t <= 0`.
+  - Measured against M6 (6 full games each, T at 2400 sims), `max_t` settings:
+
+    | `temperature` | distinct games | first divergence | T's score | avg material for T |
+    | :--- | :--- | :--- | :--- | :--- |
+    | 0.0 | 1/5 | never (identical) | — | — |
+    | 1.0 | 5/5 | ply 3 | 6.0/6 | +12.5 |
+    | 1.5 | 5/5 | ply 1 | 6.0/6 | +13.3 |
+    | 2.0 | 5/5 | ply 1 | 6.0/6 | +11.8 |
+
+    Root-move spread over 20 fresh searches: `t=1.0` keeps the same first move 16/20 times at the
+    start position, `t=1.5` 13/20, `t=2.0` 6/20. So raise `t` above 1.5 if the opening itself must
+    vary too. Cost against a weak opponent is negligible; against a peer, budget accordingly.
   - Temperature is **not** in the `get_shared_engine` cache key, which is correct on the Server
     path (it is a per-`search()` argument). Do not push it down into the shared `TransformerEngine`
     without adding it to that key, or two presets will alias onto one cached engine.
