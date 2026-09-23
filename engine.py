@@ -108,6 +108,13 @@ class GameEngine:
             book_path=self.book_path,
         )
 
+        # 每个 GameEngine 独占一个 MCTSCpp：共享引擎按 ckpt 等键跨预设复用，
+        # 而 C++ search() 会写入实例的 cfg.temperature，多会话共用会互相覆盖。
+        self.cpp_mcts = None
+        if self.engine.cpp_mcts is not None:
+            from search.cpp import load_cpp_mcts
+            self.cpp_mcts = load_cpp_mcts()()
+
         self.board = chess.Board()
         # Per-session search tree root if MCTS tree reuse is desired
         self.root = None
@@ -152,9 +159,9 @@ class GameEngine:
 
         # Priority 3: MCTS (if sims > 0)
         if mv is None and self.mcts_sims > 0:
-            if self.engine.cpp_mcts is not None:
+            if self.cpp_mcts is not None:
                 try:
-                    move_str, _ = self.engine.cpp_mcts.search(
+                    move_str, _ = self.cpp_mcts.search(
                         self.board.fen(),
                         self.engine.evaluate_tensor,
                         simulations=self.mcts_sims,
