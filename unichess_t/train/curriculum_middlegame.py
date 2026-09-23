@@ -20,13 +20,13 @@ import torch.nn.functional as F
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from model.dataset import RECORD_DTYPE, decode_batch, decode_targets, get_shards
-from model.loss import ChessLoss
-from model.transformer import StratifiedChessTransformer
+from unichess_t.model.dataset import RECORD_DTYPE, decode_batch, decode_targets, get_shards
+from unichess_t.model.loss import ChessLoss
+from unichess_t.model.transformer import StratifiedChessTransformer
 
 
 def set_seed(seed: int):

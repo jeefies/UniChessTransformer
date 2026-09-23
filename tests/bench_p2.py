@@ -11,7 +11,7 @@ if str(PROJECT_ROOT) not in sys.path:
 
 import chess
 import torch
-from search.cpp import load_cpp_mcts
+from unichess_t.search.cpp import load_cpp_mcts
 
 
 def dummy_eval(tensor):

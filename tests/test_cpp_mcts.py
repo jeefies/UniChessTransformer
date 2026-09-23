@@ -14,8 +14,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from core.encoding import encode
-from search.cpp import encode_planes, get_legal_moves, load_cpp_mcts, perft
+from unichess_t.core.encoding import encode
+from unichess_t.search.cpp import encode_planes, get_legal_moves, load_cpp_mcts, perft
 
 
 def test_perft():

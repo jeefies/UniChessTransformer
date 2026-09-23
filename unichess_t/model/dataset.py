@@ -8,7 +8,7 @@ import numpy as np
 import torch
 from torch.utils.data import BatchSampler, DataLoader, Dataset, RandomSampler, SequentialSampler
 
-from core.encoding import NUM_PLANES
+from unichess_t.core.encoding import NUM_PLANES
 
 RECORD_DTYPE = np.dtype([
     ("pawns",       "<u8"), ("knights", "<u8"), ("bishops", "<u8"),

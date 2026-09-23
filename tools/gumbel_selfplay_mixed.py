@@ -20,12 +20,12 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from core.encoding import encode
-from core.moves import move_to_index, move_to_promo_index
-from engine.engine import TransformerEngine
-from model.dataset import get_shards, make_loader
-from model.loss import ChessLoss
-from model.transformer import create_transformer
+from unichess_t.core.encoding import encode
+from unichess_t.core.moves import move_to_index, move_to_promo_index
+from unichess_t.engine.engine import TransformerEngine
+from unichess_t.model.dataset import get_shards, make_loader
+from unichess_t.model.loss import ChessLoss
+from unichess_t.model.transformer import create_transformer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -171,7 +171,7 @@ def play_game_python(
     board = chess.Board()
     game_data: list[tuple[np.ndarray, np.ndarray, int, float, chess.Move]] = []
 
-    from search.mcts import MCTS, MCTSConfig
+    from unichess_t.search.mcts import MCTS, MCTSConfig
     mcts_cfg = MCTSConfig(
         simulations=simulations,
         batch_size=256,
@@ -481,7 +481,7 @@ def main():
 
     cpp_mcts = None
     try:
-        from search.cpp import load_cpp_mcts
+        from unichess_t.search.cpp import load_cpp_mcts
         CppMCTSClass = load_cpp_mcts()
         cpp_mcts = CppMCTSClass()
         if args.seed is not None:

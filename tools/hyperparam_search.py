@@ -32,8 +32,8 @@ import numpy as np
 import torch
 
 from eval.puzzle_bench import BUILTIN_PUZZLES
-from search.mcts import MCTSConfig
-from search.parallel_mcts import ParallelMCTS
+from unichess_t.search.mcts import MCTSConfig
+from unichess_t.search.parallel_mcts import ParallelMCTS
 
 # Candidate values specified in prompt
 GRID = {

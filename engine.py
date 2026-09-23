@@ -26,7 +26,7 @@ TRANSFORMER_ROOT = Path(__file__).resolve().parent
 if str(TRANSFORMER_ROOT) not in sys.path:
     sys.path.insert(0, str(TRANSFORMER_ROOT))
 
-from engine.engine import TransformerEngine
+from unichess_t.engine.engine import TransformerEngine
 
 logger = logging.getLogger(__name__)
 
@@ -112,7 +112,7 @@ class GameEngine:
         # 而 C++ search() 会写入实例的 cfg.temperature，多会话共用会互相覆盖。
         self.cpp_mcts = None
         if self.engine.cpp_mcts is not None:
-            from search.cpp import load_cpp_mcts
+            from unichess_t.search.cpp import load_cpp_mcts
             self.cpp_mcts = load_cpp_mcts()()
 
         self.board = chess.Board()
@@ -135,7 +135,7 @@ class GameEngine:
         # Advance MCTS root if available
         if self.root is not None:
             try:
-                from search.mcts import MCTS
+                from unichess_t.search.mcts import MCTS
                 self.root = MCTS.advance_root(self.root, move)
             except Exception:
                 self.root = None
@@ -177,7 +177,7 @@ class GameEngine:
                     logger.warning(f"C++ MCTS failed in GameEngine ({e}), falling back to Python MCTS")
 
             if mv is None:
-                from search.mcts import MCTS, MCTSConfig
+                from unichess_t.search.mcts import MCTS, MCTSConfig
                 mcts_cfg = MCTSConfig(
                     simulations=self.mcts_sims,
                     batch_size=self.mcts_batch,
@@ -205,7 +205,7 @@ class GameEngine:
         # Advance MCTS root for next moves
         if self.root is not None:
             try:
-                from search.mcts import MCTS
+                from unichess_t.search.mcts import MCTS
                 self.root = MCTS.advance_root(self.root, mv)
             except Exception:
                 self.root = None

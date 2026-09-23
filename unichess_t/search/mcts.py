@@ -8,8 +8,8 @@ from typing import Callable
 import chess
 import numpy as np
 
-from core.encoding import orient_move
-from core.moves import move_to_index, move_to_promo_index
+from unichess_t.core.encoding import orient_move
+from unichess_t.core.moves import move_to_index, move_to_promo_index
 
 
 @dataclass

@@ -1,7 +1,7 @@
-"""Curriculum fine-tuning for StratifiedChessTransformer opening expert.
+"""Curriculum fine-tuning for StratifiedChessTransformer endgame expert.
 
-Scores opening positions (piece_count >= 24) by difficulty (L_policy + lambda * L_wdl)
-in chunks, sorts them from easiest to hardest, and fine-tunes the opening expert network.
+Scores endgame positions by difficulty (L_policy + lambda * L_wdl) in chunks,
+sorts them from easiest to hardest, and fine-tunes the endgame expert network.
 """
 from __future__ import annotations
 
@@ -20,13 +20,13 @@ import torch.nn.functional as F
 from torch.optim import AdamW
 from torch.optim.lr_scheduler import CosineAnnealingLR
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from model.dataset import RECORD_DTYPE, decode_batch, decode_targets, get_shards
-from model.loss import ChessLoss
-from model.transformer import StratifiedChessTransformer
+from unichess_t.model.dataset import RECORD_DTYPE, decode_batch, decode_targets, get_shards
+from unichess_t.model.loss import ChessLoss
+from unichess_t.model.transformer import StratifiedChessTransformer, transformer_20m
 
 
 def set_seed(seed: int):
@@ -38,10 +38,10 @@ def set_seed(seed: int):
 
 
 def parse_args():
-    parser = argparse.ArgumentParser(description="Opening Curriculum Fine-tuning")
-    parser.add_argument("--base-ckpt", type=str, default="runs/stratified_p3_pretrain/best_model.pt")
+    parser = argparse.ArgumentParser(description="Endgame Curriculum Fine-tuning")
+    parser.add_argument("--base-ckpt", type=str, default="runs/stratified_20m/best_model.pt")
     parser.add_argument("--data-dir", type=str, default="/home/jeefy/UniChess/data/shards_evals")
-    parser.add_argument("--output-dir", type=str, default="runs/stratified_p1_opening")
+    parser.add_argument("--output-dir", type=str, default="runs/stratified_curriculum")
     parser.add_argument("--max-steps", type=int, default=10000)
     parser.add_argument("--batch-size", type=int, default=512)
     parser.add_argument("--chunk-size", type=int, default=65536)
@@ -58,8 +58,8 @@ def parse_args():
     return parser.parse_args()
 
 
-def load_opening_from_checkpoint(ckpt_path: str | Path, device: torch.device) -> tuple[StratifiedChessTransformer, nn.Module, dict]:
-    """Loads StratifiedChessTransformer from ckpt and extracts the opening expert."""
+def load_endgame_from_checkpoint(ckpt_path: str | Path, device: torch.device) -> tuple[StratifiedChessTransformer, nn.Module, dict]:
+    """Loads StratifiedChessTransformer from ckpt and extracts the endgame expert."""
     path = Path(ckpt_path)
     if not path.exists():
         raise FileNotFoundError(f"Checkpoint not found: {path}")
@@ -71,12 +71,12 @@ def load_opening_from_checkpoint(ckpt_path: str | Path, device: torch.device) ->
     clean_sd = {k.removeprefix("_orig_mod."): v for k, v in state_dict.items()}
     full_model.load_state_dict(clean_sd)
 
-    opening_expert = full_model.opening.to(device)
-    return full_model, opening_expert, ckpt if isinstance(ckpt, dict) else {}
+    endgame_expert = full_model.endgame.to(device)
+    return full_model, endgame_expert, ckpt if isinstance(ckpt, dict) else {}
 
 
-def get_opening_records_generator(shards: list[Path], chunk_size: int):
-    """Iterates across shards, filters piece_count >= 24, yields numpy record chunks."""
+def get_endgame_records_generator(shards: list[Path], chunk_size: int):
+    """Iterates across shards, filters pieces <= 12, yields numpy record chunks."""
     buffer: list[np.ndarray] = []
     total_buffered = 0
 
@@ -84,14 +84,14 @@ def get_opening_records_generator(shards: list[Path], chunk_size: int):
         mmap_records = np.memmap(shard_path, dtype=RECORD_DTYPE, mode="r")
         occ = mmap_records["occ_white"] | mmap_records["occ_black"]
         counts = np.bitwise_count(occ)
-        opening_indices = np.nonzero(counts >= 24)[0]
+        endgame_indices = np.nonzero(counts <= 12)[0]
 
-        if len(opening_indices) == 0:
+        if len(endgame_indices) == 0:
             continue
 
-        op_recs = np.array(mmap_records[opening_indices])
-        buffer.append(op_recs)
-        total_buffered += len(op_recs)
+        endgame_recs = np.array(mmap_records[endgame_indices])
+        buffer.append(endgame_recs)
+        total_buffered += len(endgame_recs)
 
         while total_buffered >= chunk_size:
             concatenated = np.concatenate(buffer, axis=0)
@@ -148,15 +148,15 @@ def save_curriculum_checkpoint(
     output_dir: Path,
     filename: str,
     full_model: StratifiedChessTransformer,
-    opening_expert: nn.Module,
+    endgame_expert: nn.Module,
     step: int,
     optimizer: torch.optim.Optimizer,
     scheduler: torch.optim.lr_scheduler._LRScheduler,
     base_ckpt: dict,
 ):
-    """Updates full_model and ckpt state dict with the refined opening weights."""
+    """Updates full_model and ckpt state dict with the refined endgame weights."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    full_model.opening.load_state_dict(opening_expert.state_dict())
+    full_model.endgame.load_state_dict(endgame_expert.state_dict())
 
     new_state_dict = full_model.state_dict()
     save_dict = dict(base_ckpt)
@@ -165,7 +165,7 @@ def save_curriculum_checkpoint(
         "model": new_state_dict,
         "optimizer": optimizer.state_dict(),
         "scheduler": scheduler.state_dict(),
-        "opening_curriculum": True,
+        "endgame_curriculum": True,
     })
 
     save_path = output_dir / filename
@@ -196,11 +196,11 @@ def main():
         amp_dtype = None
         scaler = None
 
-    # Load base checkpoint & extract opening expert
+    # Load base checkpoint & extract endgame expert
     print(f"Loading base checkpoint: {args.base_ckpt}")
-    full_model, opening_expert, base_ckpt = load_opening_from_checkpoint(args.base_ckpt, device)
-    param_count = sum(p.numel() for p in opening_expert.parameters() if p.requires_grad)
-    print(f"Extracted opening expert: {param_count:,} parameters ({param_count/1e6:.2f}M)")
+    full_model, endgame_expert, base_ckpt = load_endgame_from_checkpoint(args.base_ckpt, device)
+    param_count = sum(p.numel() for p in endgame_expert.parameters() if p.requires_grad)
+    print(f"Extracted endgame expert: {param_count:,} parameters ({param_count/1e6:.2f}M)")
 
     # Shards
     shards = get_shards(args.data_dir)
@@ -209,9 +209,9 @@ def main():
     # Optimizer & Scheduler & Loss
     fused = (device.type == "cuda" and hasattr(torch.optim.AdamW, "_step_supports_fused"))
     try:
-        optimizer = AdamW(opening_expert.parameters(), lr=args.lr, weight_decay=args.weight_decay, fused=fused)
+        optimizer = AdamW(endgame_expert.parameters(), lr=args.lr, weight_decay=args.weight_decay, fused=fused)
     except Exception:
-        optimizer = AdamW(opening_expert.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = AdamW(endgame_expert.parameters(), lr=args.lr, weight_decay=args.weight_decay)
 
     scheduler = CosineAnnealingLR(optimizer, T_max=args.max_steps, eta_min=args.min_lr)
     criterion = ChessLoss(policy_weight=1.0, promo_weight=0.1, wdl_weight=args.lambda_val)
@@ -224,22 +224,22 @@ def main():
     recent_p5: list[float] = []
     recent_wdl: list[float] = []
 
-    print(f"Starting opening curriculum training: max_steps={args.max_steps}, batch_size={args.batch_size}, chunk_size={args.chunk_size}")
+    print(f"Starting endgame curriculum training: max_steps={args.max_steps}, batch_size={args.batch_size}, chunk_size={args.chunk_size}")
 
-    chunk_gen = get_opening_records_generator(shards, args.chunk_size)
+    chunk_gen = get_endgame_records_generator(shards, args.chunk_size)
 
     while step < args.max_steps:
         try:
             chunk = next(chunk_gen)
         except StopIteration:
             # Re-cycle over shards if max_steps not reached
-            chunk_gen = get_opening_records_generator(shards, args.chunk_size)
+            chunk_gen = get_endgame_records_generator(shards, args.chunk_size)
             chunk = next(chunk_gen)
 
-        print(f"\n--- Scoring chunk of {len(chunk)} opening records ---")
+        print(f"\n--- Scoring chunk of {len(chunk)} endgame records ---")
         t_score_start = time.time()
         difficulty_scores = score_chunk(
-            opening_expert,
+            endgame_expert,
             chunk,
             args.scoring_microbatch,
             args.lambda_val,
@@ -257,7 +257,7 @@ def main():
         sorted_chunk = chunk[sorted_indices]
 
         # Step through sorted minibatches
-        opening_expert.train()
+        endgame_expert.train()
         n_records = len(sorted_chunk)
         for b_start in range(0, n_records - args.batch_size + 1, args.batch_size):
             if step >= args.max_steps:
@@ -277,27 +277,27 @@ def main():
 
             if amp_dtype is not None:
                 with torch.autocast(device_type=device.type, dtype=amp_dtype):
-                    p_out, pr_out, w_out = opening_expert(x)
+                    p_out, pr_out, w_out = endgame_expert(x)
                     loss_out = criterion(p_out, pr_out, w_out, p_tgt, pr_tgt, w_tgt)
 
                 if scaler is not None:
                     scaler.scale(loss_out.total_loss).backward()
                     if args.grad_clip > 0:
                         scaler.unscale_(optimizer)
-                        torch.nn.utils.clip_grad_norm_(opening_expert.parameters(), args.grad_clip)
+                        torch.nn.utils.clip_grad_norm_(endgame_expert.parameters(), args.grad_clip)
                     scaler.step(optimizer)
                     scaler.update()
                 else:
                     loss_out.total_loss.backward()
                     if args.grad_clip > 0:
-                        torch.nn.utils.clip_grad_norm_(opening_expert.parameters(), args.grad_clip)
+                        torch.nn.utils.clip_grad_norm_(endgame_expert.parameters(), args.grad_clip)
                     optimizer.step()
             else:
-                p_out, pr_out, w_out = opening_expert(x)
+                p_out, pr_out, w_out = endgame_expert(x)
                 loss_out = criterion(p_out, pr_out, w_out, p_tgt, pr_tgt, w_tgt)
                 loss_out.total_loss.backward()
                 if args.grad_clip > 0:
-                    torch.nn.utils.clip_grad_norm_(opening_expert.parameters(), args.grad_clip)
+                    torch.nn.utils.clip_grad_norm_(endgame_expert.parameters(), args.grad_clip)
                 optimizer.step()
 
             scheduler.step()
@@ -347,7 +347,7 @@ def main():
                     output_dir,
                     f"step_{step}.pt",
                     full_model,
-                    opening_expert,
+                    endgame_expert,
                     step,
                     optimizer,
                     scheduler,
@@ -359,7 +359,7 @@ def main():
         output_dir,
         "latest_checkpoint.pt",
         full_model,
-        opening_expert,
+        endgame_expert,
         step,
         optimizer,
         scheduler,
@@ -369,13 +369,13 @@ def main():
         output_dir,
         "best_model.pt",
         full_model,
-        opening_expert,
+        endgame_expert,
         step,
         optimizer,
         scheduler,
         base_ckpt,
     )
-    print("Curriculum opening training run completed successfully.")
+    print("Curriculum endgame training run completed successfully.")
 
 
 if __name__ == "__main__":

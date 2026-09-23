@@ -23,7 +23,7 @@ if str(PROJECT_ROOT) not in sys.path:
 if str(BASELINE_ROOT) not in sys.path:
     sys.path.insert(0, str(BASELINE_ROOT))
 
-from engine.engine import TransformerEngine
+from unichess_t.engine.engine import TransformerEngine
 from model_cnn import ChessCNN
 from search_engine import policy_order
 from neural_search_v4 import NeuralSearchV4

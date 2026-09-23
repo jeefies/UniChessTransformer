@@ -14,8 +14,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from core.encoding import NUM_PLANES, encode, orient, orient_move, unorient_move
-from core.moves import (
+from unichess_t.core.encoding import NUM_PLANES, encode, orient, orient_move, unorient_move
+from unichess_t.core.moves import (
     POLICY_SIZE,
     PROMO_SIZE,
     index_to_move,
@@ -25,12 +25,12 @@ from core.moves import (
     move_to_promo_index,
     uci_to_index,
 )
-from engine.engine import TransformerEngine
+from unichess_t.engine.engine import TransformerEngine
 from eval.arena import elo_with_error, sprt_llr, sprt_verdict
 from eval.puzzle_bench import BUILTIN_PUZZLES, evaluate_puzzles
-from model.dataset import RECORD_DTYPE, decode_batch, decode_targets, get_shards, make_loader
-from model.loss import ChessLoss, compute_metrics
-from model.transformer import (
+from unichess_t.model.dataset import RECORD_DTYPE, decode_batch, decode_targets, get_shards, make_loader
+from unichess_t.model.loss import ChessLoss, compute_metrics
+from unichess_t.model.transformer import (
     PRESETS,
     ChessTransformer,
     StratifiedChessTransformer,
@@ -44,8 +44,8 @@ from model.transformer import (
     transformer_small,
     transformer_tiny,
 )
-from search.parallel_mcts import ParallelMCTS, benchmark_parallel_mcts
-from search.mcts import MCTS, MCTSConfig, Node, priors_from_policy
+from unichess_t.search.parallel_mcts import ParallelMCTS, benchmark_parallel_mcts
+from unichess_t.search.mcts import MCTS, MCTSConfig, Node, priors_from_policy
 from uci import UCILoop
 
 
@@ -336,7 +336,7 @@ def test_uci_protocol():
 def test_cpp_mcts():
     import chess
     import torch
-    from search.cpp import load_cpp_mcts
+    from unichess_t.search.cpp import load_cpp_mcts
 
     MCTSCpp = load_cpp_mcts()
     engine = MCTSCpp()

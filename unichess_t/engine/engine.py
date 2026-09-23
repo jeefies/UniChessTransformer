@@ -12,10 +12,10 @@ import numpy as np
 import torch
 import torch.nn as nn
 
-from core.encoding import encode, orient_move
-from core.moves import move_to_index, move_to_promo_index
-from model.transformer import ChessTransformer, TransformerConfig
-from search.mcts import MCTS, MCTSConfig
+from unichess_t.core.encoding import encode, orient_move
+from unichess_t.core.moves import move_to_index, move_to_promo_index
+from unichess_t.model.transformer import ChessTransformer, TransformerConfig
+from unichess_t.search.mcts import MCTS, MCTSConfig
 
 logger = logging.getLogger(__name__)
 
@@ -61,7 +61,7 @@ class TransformerEngine:
             cfg_dict = ckpt.get("cfg", {})
             state_dict = ckpt.get("model", ckpt.get("state_dict", ckpt))
             if preset == "stratified_20m" or any(k.startswith("experts.") for k in state_dict.keys()):
-                from model.transformer import stratified_20m
+                from unichess_t.model.transformer import stratified_20m
                 self.model = stratified_20m().to(self.device).eval()
                 self.cfg = getattr(self.model, "cfg", None)
             else:
@@ -111,7 +111,7 @@ class TransformerEngine:
         self.cpp_mcts = None
         if self.use_cpp_mcts:
             try:
-                from search.cpp import load_cpp_mcts
+                from unichess_t.search.cpp import load_cpp_mcts
                 MCTSCpp = load_cpp_mcts()
                 self.cpp_mcts = MCTSCpp()
                 if seed is not None:

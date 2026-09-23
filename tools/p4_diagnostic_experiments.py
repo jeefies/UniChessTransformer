@@ -45,12 +45,12 @@ if str(PROJECT_ROOT) not in sys.path:
 sys.path.insert(0, '/home/jeefy/UniChess/Server')
 from models import create_engine, _load_engine_class, resolve_kwargs
 
-from core.encoding import encode
-from core.moves import move_to_index, move_to_promo_index
-from engine.engine import TransformerEngine
-from model.dataset import get_shards, make_loader
-from model.loss import ChessLoss, LossOutput, compute_metrics
-from model.transformer import create_transformer
+from unichess_t.core.encoding import encode
+from unichess_t.core.moves import move_to_index, move_to_promo_index
+from unichess_t.engine.engine import TransformerEngine
+from unichess_t.model.dataset import get_shards, make_loader
+from unichess_t.model.loss import ChessLoss, LossOutput, compute_metrics
+from unichess_t.model.transformer import create_transformer
 
 logging.basicConfig(
     level=logging.INFO,
@@ -170,7 +170,7 @@ def play_game_cpp(engine, cpp_mcts, simulations=800, batch_size=64, add_noise=Tr
 def play_game_python(engine, simulations=800, batch_size=128, add_noise=True, max_plies=500):
     board = chess.Board()
     game_data = []
-    from search.mcts import MCTS, MCTSConfig
+    from unichess_t.search.mcts import MCTS, MCTSConfig
     mcts_cfg = MCTSConfig(
         simulations=simulations, batch_size=batch_size, temperature=0.0,
         dirichlet_eps=0.25 if add_noise else 0.0,
@@ -749,7 +749,7 @@ def main():
     engine = TransformerEngine(model, device=args.device, precision="bf16", use_cpp_mcts=True, mcts_sims=0)
     cpp_mcts = None
     try:
-        from search.cpp import load_cpp_mcts
+        from unichess_t.search.cpp import load_cpp_mcts
         CppMCTSClass = load_cpp_mcts()
         cpp_mcts = CppMCTSClass()
         cpp_mcts.set_seed(42)

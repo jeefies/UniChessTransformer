@@ -14,8 +14,8 @@ PROJECT_ROOT = Path(__file__).resolve().parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from engine.engine import TransformerEngine
-from model.transformer import create_transformer
+from unichess_t.engine.engine import TransformerEngine
+from unichess_t.model.transformer import create_transformer
 
 ENGINE_NAME = "UniChessTransformer"
 ENGINE_AUTHOR = "jeefy"

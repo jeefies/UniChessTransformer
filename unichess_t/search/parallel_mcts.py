@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 import sys
 
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 from dataclasses import dataclass
@@ -19,9 +19,9 @@ import chess
 import numpy as np
 import torch
 
-from core.encoding import encode, orient_move
-from core.moves import move_to_index, move_to_promo_index
-from search.mcts import MCTS, MCTSConfig, Node, priors_from_policy
+from unichess_t.core.encoding import encode, orient_move
+from unichess_t.core.moves import move_to_index, move_to_promo_index
+from unichess_t.search.mcts import MCTS, MCTSConfig, Node, priors_from_policy
 
 
 def _gpu_evaluator_process(
@@ -40,7 +40,7 @@ def _gpu_evaluator_process(
     torch.set_num_threads(2)
     device = torch.device(device_str if (torch.cuda.is_available() and device_str.startswith("cuda")) else "cpu")
 
-    from model.transformer import ChessTransformer, TransformerConfig, create_transformer
+    from unichess_t.model.transformer import ChessTransformer, TransformerConfig, create_transformer
 
     if ckpt_path and Path(ckpt_path).exists():
         ckpt = torch.load(ckpt_path, map_location=device, weights_only=False)
