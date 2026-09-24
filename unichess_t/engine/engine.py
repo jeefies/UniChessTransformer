@@ -136,8 +136,17 @@ class TransformerEngine:
 
         Returns: (policy[N, 4096], promo[N, 4], wdl[N, 3])
         """
-        xs = np.stack([encode(b) for b in boards])
-        x = torch.from_numpy(xs).to(self.device)
+        return self.evaluate_planes(np.stack([encode(b) for b in boards]))
+
+    @torch.no_grad()
+    def evaluate_planes(
+        self, xs: np.ndarray
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """Same as evaluate_batch, but takes already-encoded planes (N, 19, 8, 8) float32
+        (the kit C++ PUCT writes the encoding directly). Stratified models route by the
+        piece count in planes 0-11, so no board is needed.
+        """
+        x = torch.from_numpy(np.ascontiguousarray(xs, dtype=np.float32)).to(self.device)
 
         if self.autocast:
             with torch.autocast(device_type=self.device.type, dtype=self.dtype):
