@@ -1,5 +1,31 @@
 # AGENTS.md
 
+> **本文件尚未按重构后的布局重写**（全量重构 R0–R6 进行中）。下面大量条目描述的是已删除的
+> `unichess_t` 包、自带的 C++ MCTS、`train/` 脚本与 `tools/` 自对弈，**已失效**；动手前先读
+> 这一节，能用的信息以 `README.md`、`docs/architecture.md` 和实际存在的文件为准。
+>
+> 重构后（当前 `rebuild` 分支，已推 GitHub）的真实情况：
+>
+> - **仓库根即包**：`import Transformer`，import 根是 `~/UniChess`。文件只有
+>   `model.py`（结构 + 三专家路由，state_dict 键名冻结）、`evaluator.py`（批量前向）、
+>   `kit.py`（kit 接入：`make_player_factory` / `make_evaluators` / `make_task` /
+>   `make_adapter` / `TTrainAdapter`）、`engine.py`（Server 插件，
+>   `KIT_FACTORY="Transformer.kit:make_player_factory"`）、
+>   `configs/{t20m,stratified_opening,stratified_middlegame,stratified_endgame,p3_mlh}.json`、
+>   `tests/test_r3.py`。
+> - 旧 `unichess_t` 包（含自带的 C++ MCTS 与 Python MCTS）、`train/` 五个脚本、
+>   `tools/`、`eval/`、`logs/`、`benchmark_transformer.py`、`uci.py` 已删除（git 历史可查）。
+> - **搜索不在本仓库**：所有对局走 kit 的 `PUCTCpp` / `PUCT`（`Kit/search/`），后者与 Python
+>   版逐位一致、跨对局攒批。Syzygy 在 `Kit/rules/tablebase.py`，开局在
+>   `Kit/rules/openings.py`。
+> - 训练走 kit：`python -m Kit train Transformer/configs/<name>.json`；口径与损失在
+>   `Kit/planes19/`。curriculum 配方只训一个专家，其余冻结，导出仍是完整三专家权重。
+> - 单测：`cd ~/UniChess && python -m unittest Transformer.tests.test_r3`（17 项）。
+>
+> 仍然有效的部分：模型分层与参数量、checkpoint 的 `experts.*` / `opening.*` 双键别名、
+> MLH 头与 P3 之前的兼容规则、`config.json` 预设的 `max_mcts` / `max_t` 语义与排序陷阱、
+> temperature 的实测数据（mean SF rank 表）。
+
 ## Overview
 High-performance neural chess engine combining Transformer backbones with 2D spatial geometric priors, bilinear square-to-square policy heads, Win-Draw-Loss (WDL) value heads, phase-stratified routing, and high-performance batched Monte Carlo Tree Search (MCTS) with C++ acceleration.
 
