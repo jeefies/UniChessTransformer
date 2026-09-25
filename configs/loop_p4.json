@@ -1,0 +1,92 @@
+{
+  "out": "/home/jeefy/UniChess/Transformer/runs/loop_p4",
+  "generations": 10,
+  "initial": "/home/jeefy/UniChess/Transformer/runs/stratified_p4_selfplay_corrected/best_model.pt",
+  "games": 200,
+  "window": 2,
+  "engine": {
+    "root": "/home/jeefy/UniChess",
+    "factory": "Transformer.kit:make_player_factory",
+    "kwargs": {
+      "checkpoint": "{weights}",
+      "simulations": 800,
+      "batch_size": 64,
+      "precision": "fp16",
+      "syzygy_path": "/home/jeefy/UniChess/data/raw/syzygy345"
+    }
+  },
+  "selfplay": {
+    "max_plies": 400,
+    "concurrency": 32,
+    "book_plies": 6,
+    "openings": "/home/jeefy/UniChess/Kit/data/openings.txt"
+  },
+  "sink": {
+    "factory": "Kit.planes19.sink:SelfPlayShardSink",
+    "kwargs": {"path": "{selfplay_dir}/selfplay.sp.bin"}
+  },
+  "train": {
+    "task": {
+      "factory": "Transformer.kit:make_task",
+      "kwargs": {
+        "stratified": true,
+        "base_ckpt": "{weights}",
+        "data": {
+          "kind": "mix",
+          "batch_size": 512,
+          "sources": [
+            {
+              "weight": 0.7,
+              "shards": {
+                "dir": "/home/jeefy/UniChess/ResNet/data/shards_evals",
+                "pattern": "evals_*.bin",
+                "slice": [0, 4]
+              },
+              "repair_castling": false,
+              "q_ratio": 0.0
+            },
+            {
+              "weight": 0.3,
+              "shards": {
+                "files": "{selfplay_files}"
+              },
+              "repair_castling": false,
+              "q_ratio": 0.0
+            }
+          ]
+        },
+        "loss": {
+          "kind": "t_chess",
+          "policy_weight": 1.0,
+          "promo_weight": 0.1,
+          "wdl_weight": 1.0,
+          "policy_loss_type": "kl_divergence"
+        }
+      }
+    },
+    "steps": 1000,
+    "accum": 4,
+    "seed": 42,
+    "device": "cuda",
+    "precision": "bf16",
+    "clip": 1.0,
+    "nonfinite": "raise",
+    "optimizer": {"lr": 5e-06, "weight_decay": 0.0001, "betas": [0.9, 0.999], "fused": false},
+    "schedule": {"kind": "constant"},
+    "runtime": {"num_workers": 4, "pin_memory": true},
+    "export": {"best": "best_model.pt", "final": "final.pt"}
+  },
+  "export": "final.pt",
+  "arena": {
+    "match": {
+      "pairs": 40,
+      "seed": 20260926,
+      "max_plies": 400,
+      "concurrency": 8,
+      "openings": "bundled",
+      "simulations": 2400,
+      "sprt": {"elo0": 0.0, "elo1": 40.0, "alpha": 0.05, "beta": 0.1}
+    },
+    "gate": {"kind": "sprt"}
+  }
+}

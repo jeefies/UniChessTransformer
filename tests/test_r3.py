@@ -330,6 +330,61 @@ class TestConfigs(unittest.TestCase):
                              (2.0 * 6 + 20.0 * (1.0 - 0.0)) / 100.0])
         self.assertTrue(torch.allclose(got, want), (got, want))
 
+    def test_loop_p4(self):
+        """换代循环配方：钉死 P4 自对弈口径（30% 自对弈 + 70% 监督、lr 5e-6、KL）。
+
+        与旧 ``tools/gumbel_selfplay_corrected.py`` 的 argparse 默认值逐项对应；
+        自对弈那 30% 走 ``*.sp.bin`` 显式分片列表（loop 的 ``{selfplay_files}`` 占位符），
+        监督那 70% 取前 4 片（旧 ``--max-original-shards 4``）。
+        """
+        cfg = json.loads((ROOT / "configs" / "loop_p4.json").read_text(encoding="utf-8"))
+        self.assertTrue(cfg["initial"].endswith(
+            "runs/stratified_p4_selfplay_corrected/best_model.pt"), cfg["initial"])
+        self.assertEqual(cfg["export"], "final.pt")
+        self.assertEqual(cfg["train"]["export"]["final"], "final.pt")
+        self.assertEqual(cfg["arena"]["gate"], {"kind": "sprt"})
+        self.assertEqual(cfg["arena"]["match"]["simulations"], 2400)
+        self.assertEqual(cfg["arena"]["match"]["sprt"],
+                         {"elo0": 0.0, "elo1": 40.0, "alpha": 0.05, "beta": 0.1})
+        self.assertEqual(cfg["engine"]["kwargs"]["simulations"], 800)
+        self.assertEqual(cfg["engine"]["kwargs"]["checkpoint"], "{weights}")
+        # 开局库路径必须绝对：loop 的三个子进程都以 <out> 为 cwd 运行
+        self.assertEqual(cfg["selfplay"]["openings"],
+                         "/home/jeefy/UniChess/Kit/data/openings.txt")
+        self.assertEqual(cfg["sink"]["kwargs"]["path"], "{selfplay_dir}/selfplay.sp.bin")
+
+        kw = cfg["train"]["task"]["kwargs"]
+        self.assertIs(kw["stratified"], True)
+        self.assertNotIn("trainable_expert", kw)              # 三专家一起训
+        self.assertEqual(kw["base_ckpt"], "{weights}")
+        data = kw["data"]
+        self.assertEqual(data["kind"], "mix")
+        self.assertEqual(data["batch_size"], 512)
+        sup, sp = data["sources"]
+        self.assertEqual(sup["weight"], 0.7)
+        self.assertEqual(sup["shards"]["slice"], [0, 4])
+        self.assertIs(sup["repair_castling"], False)
+        self.assertEqual(sp["weight"], 0.3)
+        self.assertEqual(sp["shards"], {"files": "{selfplay_files}"})
+        self.assertEqual(kw["loss"], {"kind": "t_chess", "policy_weight": 1.0,
+                                      "promo_weight": 0.1, "wdl_weight": 1.0,
+                                      "policy_loss_type": "kl_divergence"})
+        self.assertEqual((cfg["train"]["optimizer"]["lr"], cfg["train"]["accum"]),
+                         (5e-06, 4))
+        self.assertEqual(cfg["train"]["clip"], 1.0)
+        self.assertEqual(cfg["train"]["schedule"], {"kind": "constant"})
+
+        # 训练的模型侧参数要能真的构造出三专家模型（数据源只做形状校验，不读分片）
+        task = tkit.make_task(stratified=True, base_ckpt=None,
+                              data={"kind": "mix", "batch_size": 8,
+                                    "sources": [{"weight": 0.7, "shards": {"dir": str(ROOT)}},
+                                                {"weight": 0.3, "shards": {"dir": str(ROOT)}}]},
+                              loss={"kind": "t_chess", "policy_loss_type": "kl_divergence"})
+        model = task.build_model()
+        self.assertEqual(len(task.param_groups(model)[0]["params"]),
+                         len(list(model.parameters())))
+        self.assertEqual(task._chess_loss.policy_loss_type, "kl_divergence")
+
 
 def torch_zeros(n: int):
     """(n, 19, 8, 8) fp32 全零平面。"""

@@ -13,7 +13,8 @@
 | `evaluator.py` | 特征前端（`evaluate_planes`，按 64 一批） |
 | `kit.py` | kit 接入：`make_player_factory` / `make_evaluators` / `make_task` / `make_adapter` / `TTrainAdapter` |
 | `engine.py` | Server 六方法插件（`KIT_FACTORY="Transformer.kit:make_player_factory"`） |
-| `configs/{t20m,stratified_opening,stratified_middlegame,stratified_endgame,p3_mlh}.json` | 训练口径 |
+| `configs/{t20m,stratified_opening,stratified_middlegame,stratified_endgame,p3_mlh}.json` | 监督训练配方（复刻旧脚本口径） |
+| `configs/loop_p4.json` | 唯一一个换代循环配方（自对弈 RL，见「换代循环」一节） |
 | `tests/test_r3.py` | 单测（17 项） |
 | `docs/architecture.md` | 架构与模块说明 |
 | `__init__.py` | 包声明 |
@@ -26,6 +27,7 @@
 ```bash
 cd ~/UniChess
 python -m Kit train Transformer/configs/t20m.json       # curriculum 配方同理
+python -m Kit loop  Transformer/configs/loop_p4.json    # 自对弈换代循环（见下）
 python -m unittest Transformer.tests.test_r3            # 17 项
 python -m Kit match <config.json> --out runs/<name>/results.jsonl
 ```
@@ -34,6 +36,30 @@ python -m Kit match <config.json> --out runs/<name>/results.jsonl
 
 所有对局都走 kit 的 `PUCTCpp` / `PUCT`（`Kit/search/`），后者与 Python 实现整树逐位一致；
 Syzygy 桌库在 `Kit/rules/tablebase.py`，开局库在 `Kit/rules/openings.py`。
+
+## 换代循环（自对弈 RL）
+
+```bash
+cd ~/UniChess && python -m Kit loop Transformer/configs/loop_p4.json
+```
+
+- **只有一个 loop 配方**：`configs/loop_p4.json`（P4 口径：每代自对弈 200 局 800 sims →
+  70% 监督 + 30% 自对弈混合训练 → 候选对冠军 40 对 2400 sims，SPRT 判 H1 才换代）。
+  起点 `initial` 是 P4 冠军；输出只写 `runs/loop_p4/`，`loop_state.json` 可中断续跑。
+- **换代的唯一依据** 是 arena 的 SPRT 结论：判决 H1 才更新 `loop_state.json` 的 champion。
+  生产权重（`config.json` 的 `max_mcts` / `max_t` 预设指向 `runs/stratified_p4_selfplay_corrected/best_model.pt`）
+  **只能由人工切换**：改 `config.json` 一次提交 + 重启 `unichess-server`，loop 不许碰它。
+- 与旧 `tools/gumbel_selfplay_corrected.py` 的**已知口径差异**（有意为之，别当 bug 查）：
+  1. 自对弈每步都加 Dirichlet 噪声（kit `run_selfplay`），旧脚本只首步加；
+  2. 混合数据按 batch 内比例切分（kit `data.kind:"mix"`），旧脚本是每 step 二选一；
+  3. 每局 Player 种子由 (seed, 局序号) 派生（kit `_game_seed`），旧的 C++ 路径是全局 seed
+     + 树复用；4. 开局 ply 由 Player 照 `GameStart.book` 原样走、不搜索（没有访问分布，
+     不进训练目标），旧脚本在开局 ply 照常搜索。
+- **训练与对局的精度不同**：`train` 段 `bf16`（与五个监督配方一致），`engine` 段 `fp16`
+  （与 `config.json` 生产预设一致），两者绝不混用同一批前向。
+- 每一代要看的四个数：自对弈局面数与三类终止分布、policy/WDL loss 曲线、
+  arena 分数与 SPRT 判决、墙钟。若自对弈 90%+ 三次重复，说明数据没多样性，
+  先查 kit 的每局种子是否真的落到了 Player 的 RNG 上。
 
 - **Curriculum 配方只训一个专家**（由 config 指定），另外两个从 `stratified_20m` 预训练
   **冻结**导入，导出仍是完整三个专家权重。

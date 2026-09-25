@@ -475,7 +475,10 @@ A series of diagnostic experiments (`tools/p4_diagnostic_experiments.py`) identi
 ### 3. P4 Corrected Configuration (Final Winning Recipe)
 - **Learning Rate**: `5e-6` (reduced from `1e-4`)
 - **Gradient Accumulation**: `4` steps
-- **Mixed Data Ratio**: 30% real evaluation shards + 70% self-play data
+- **Mixed Data Ratio**: 30% self-play data + 70% real evaluation shards
+  （2026-09-26 勘误：原文写反成"30% 真实 + 70% 自对弈"。权威口径是旧脚本
+  `tools/gumbel_selfplay_corrected.py` 的 `--selfplay-ratio 0.3` 及其 docstring——
+  每个 step 以 0.3 的概率取自对弈 batch；新配方 `configs/loop_p4.json` 沿用 0.3 / 0.7）
 - **MCTS Sims**: 800 for self-play generation
 - **Batch Size**: 256 for self-play training
 
