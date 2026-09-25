@@ -27,32 +27,29 @@ Further reading: [`docs/architecture.md`](docs/architecture.md) for the architec
   - **`transformer_50m`** — 49,757,960 params, 17 layers, $d=512$, 16 heads, $d_{\text{ff}}=1160$.
   - Lightweight presets: `transformer_tiny` (3.8M), `transformer_small` (6.7M), `transformer_medium` (18.5M), `transformer_large` (35.1M).
 
-- **C++ Accelerated MCTS (`unichess_t/search/cpp/`)** — production search path
-  - PyBind11 extension delivering **6,155+ sims/sec** of batched tree search.
-  - **Native leaf-level Syzygy probing**: nodes with $\le 5$ pieces are probed against the 3-4-5 tablebases during traversal, returning exact game-theoretic values with no neural evaluation.
-  - **Tree reuse** (Stage P2): descends the retained subtree after the opponent's reply, reusing visit counts.
-  - **Dynamic FPU** (Stage P2): `parent_q - c_fpu * sqrt(1/(1 + parent_visits))` replaces the fixed first-play-urgency reduction.
-  - **Contempt** (Stage P2): biases root draws by `contempt / (1 + root_N)` to discourage premature draws.
-  - **Python fallback**: `unichess_t/search/mcts.py` (batched PUCT, virtual loss, Dirichlet noise) takes over automatically if the C++ extension is unavailable.
-  - **Multi-process parallel MCTS** (`unichess_t/search/parallel_mcts.py`): lock-free workers over a central GPU evaluator, peaking at **8,820 sims/sec** (16 workers, batch 64).
+- **Search is UniChessKit's PUCT** (`Kit/search/`) — no second search implementation in this repo
+  - `PUCTCpp` (C++ via `Kit/search/_native/puct_native.cpp`) is the production path and is bitwise
+    identical to the Python `PUCT`; leaves are encoded in C++ and forwarded as planes.
+  - Batched **across games**, which is what the Server and the arena share.
+  - Syzygy 3-4-5 (`Kit/rules/tablebase.py`) and openings (`Kit/rules/openings.py`) live in kit.
 
 - **Training & Curriculum Learning**
   - Distillation from Stockfish evaluations with joint policy cross-entropy + WDL loss (+ MLH since P3).
   - Phase-stratified curriculum fine-tuning over 64 binary evaluation shards
     (`/home/jeefy/UniChess/data/shards_evals`), 96-byte fixed records, `np.memmap` + vectorized
-    bitboard decoding.
-  - **Gumbel AlphaZero self-play** with C++ MCTS tree reuse (`tools/gumbel_selfplay_corrected.py`).
+    bitboard decoding — data code is `Kit/planes19/build`.
+  - Training itself is `Kit.train.Trainer` + `Kit/planes19/task.py`; this repo only supplies the
+    model, the batch forward and the recipes in `configs/`.
   - Current best: `runs/stratified_p4_selfplay_corrected/best_model.pt`.
 
 - **Standards & Server Integration**
-  - Full UCI protocol compliance (`uci.py`), including `setoption temperature`.
+  - UCI via kit: `python -m Kit uci Transformer/engine.py --preset max_mcts`.
   - Server integration via symlink: `/home/jeefy/UniChess/Server/models/T -> /home/jeefy/UniChess/Transformer`.
   - Presets in `config.json` drive the Server's model selection. `max_mcts` is the frontend
     default (fully deterministic); `max_t` is identical plus `temperature=1.0` +
     `root_top_k=3` for game-to-game variety with a quality guard — it samples the root visit
     distribution restricted to the 3 most-visited moves, so it can never pick a move worse
-    ranked than its 3rd root move. **All paths in `config.json` must be absolute** — unlike the
-    R engine, the T engine does not rebase relative paths against its repo root.
+    ranked than its 3rd root move. Relative preset paths resolve against this repository.
   - Production service is the systemd user unit `unichess-server`.
 
 ---
@@ -117,81 +114,46 @@ A full stage-by-stage progression table is in [`docs/experiments.md`](docs/exper
 ## Verification & Test Suite
 
 ```bash
-# Full unit test suite (13 test functions)
-/home/jeefy/miniconda3/envs/unichess/bin/python tests/test_all.py
+cd ~/UniChess
 
-# Dedicated C++ MCTS suite (perft, legal-move parity, 19-plane parity, stress)
-/home/jeefy/miniconda3/envs/unichess/bin/python tests/test_cpp_mcts.py
-
-# Stage P2 features (tree reuse, dynamic FPU, contempt)
-/home/jeefy/miniconda3/envs/unichess/bin/python tests/test_p2_features.py
-
-# Throughput / latency benchmark
-/home/jeefy/miniconda3/envs/unichess/bin/python benchmark_transformer.py
+# 远端（conda unichess，torch 在这里）
+/home/jeefy/miniconda3/envs/unichess/bin/python -m unittest Transformer.tests.test_r3 -v
 ```
+
+17 项：模型结构与参数量、分层路由、检查点往返（含 mlh_head 缺失的兼容）、kit 适配与
+Server 插件契约、5 个配方配置的逐字段钉死。需要真实权重（`runs/` 存在）的部分会自动跑。
+
+训练配方的验收口径不是"能跑完"，而是与旧脚本**逐位对齐**：前 50 个优化步的 loss / lr /
+参数哈希全部相等（见 `AGENTS.md` 的「验收」一节）。
 
 ---
 
 ## Directory Structure
 
 ```
-UniChessTransformer/
-├── core/                    # Bitboards, 19-plane encoder, move indexing
-│   ├── encoding.py          # 19-plane canonical encoding & symmetry transforms
-│   └── moves.py             # Move indexing (4096 square-to-square + promotions)
-├── model/                   # Neural network implementations
-│   ├── transformer.py       # ConvStem, 2D relative bias attention, bilinear policy,
-│   │                        #   WDL + MLH heads, StratifiedChessTransformer
-│   ├── dataset.py           # Vectorized binary shard dataset & dataloaders
-│   └── loss.py              # Multi-task policy + WDL + MLH loss
-├── search/                  # Search algorithms
-│   ├── cpp/                 # C++ MCTS with leaf Syzygy probing (PyBind11)
-│   │   ├── chess_board.hpp  # Fast C++ bitboard move generator + 19-plane encoder
-│   │   ├── mcts.hpp         # Batched search, tree reuse, dynamic FPU, contempt
-│   │   └── mcts_pybind.cpp  # PyBind11 bindings
-│   ├── mcts.py              # Python PUCT MCTS w/ virtual loss & Dirichlet (fallback)
-│   └── parallel_mcts.py     # Multi-process batched GPU evaluation search
-├── engine/                  # Engine wrappers
-│   └── engine.py            # TransformerEngine: model + search + tablebase + book
-├── engine.py                # UniChess Server GameEngine adapter (shared-weight singleton)
-├── train/                   # Training pipeline & curriculum fine-tuning
-│   ├── train.py             # Distributed/AMP training script
-│   ├── train_p3_pretrain.py # Stage P3 pretraining with the MLH head
-│   ├── curriculum_opening.py    # Stage P1 opening-expert fine-tuning
-│   ├── curriculum_middlegame.py # Middlegame curriculum fine-tuning
-│   └── curriculum_endgame.py    # Endgame curriculum fine-tuning
-├── eval/                    # Benchmark & evaluation harnesses
-│   ├── arena.py             # Automated round-robin & head-to-head runner
-│   ├── match_baseline.py    # Match harness vs chess_ai baseline
-│   ├── match_p1_vs_r.py     # Stage P1 match vs Model R
-│   └── puzzle_bench.py      # Tactical puzzle suite evaluator
-├── tools/                   # Self-play, match runners, optimization
-│   ├── hyperparam_search.py          # Parallel grid search for MCTS parameters
-│   ├── p4_diagnostic_experiments.py  # Stage P4 self-play ablations (Exp A-E)
-│   ├── gumbel_selfplay.py            # Gumbel AlphaZero self-play (original)
-│   ├── gumbel_selfplay_mixed.py      # Self-play with mixed real/self-play data
-│   ├── gumbel_selfplay_corrected.py  # Self-play, corrected recipe (LR 5e-6) — the winning run
-│   ├── run_match_T_vs_R.py                 # Baseline match vs Model R
-│   ├── run_match_curriculum_T_vs_R.py      # Stage 4 curriculum match
-│   ├── run_match_aligned_curriculum_T_vs_R.py
-│   ├── run_match_p3_T_vs_R.py              # Stage P3 match
-│   └── run_match_p4_T_vs_R.py              # Stage P4 match
-├── tests/                   # Test suites
-│   ├── test_all.py          # Full unit test suite (13 tests)
-│   ├── test_cpp_mcts.py     # Dedicated C++ MCTS verification suite
-│   ├── test_p2_features.py  # Stage P2 search feature tests
-│   └── bench_p2.py          # Stage P2 benchmark helper
-├── data/
-│   └── opening_book.bin     # Polyglot opening book
+Transformer/                # 仓库根即包（import 根是 ~/UniChess）
+├── model.py               # 网络结构：ConvStem + 2D 相对偏置 + 双线性策略头 + WDL/MLH 头
+│                           #   + StratifiedChessTransformer 三专家路由；state_dict 键名冻结
+├── evaluator.py           # 批量前向（kit 的 Player / Trainer 只用这个）
+├── kit.py                 # kit 接入：对局 PlayerFactory + 训练 TrainTask
+├── configs/               # 训练配方（复刻旧脚本）
+│   ├── t20m.json                    # 旧 train/train.py（transformer_20m）
+│   ├── stratified_opening.json      # 旧 train/curriculum_opening.py
+│   ├── stratified_middlegame.json   # 旧 train/curriculum_middlegame.py
+│   ├── stratified_endgame.json      # 旧 train/curriculum_endgame.py
+│   └── p3_mlh.json                  # 旧 train/train_p3_pretrain.py（MLH）
+├── engine.py              # Server 的模型插件（六方法 GameEngine + KIT_FACTORY）
+├── config.json            # Server 预设（max_mcts / max_t）
+├── tests/test_r3.py       # 上面那 17 项
 ├── docs/
-│   ├── architecture.md      # Architecture specification
-│   └── experiments.md       # Experimental records
-├── uci.py                   # UCI entrypoint
-├── benchmark_transformer.py # Throughput / latency benchmark
-├── config.json              # Presets consumed by the UniChess Server (absolute paths)
-├── AGENTS.md                # Agent-facing commands, invariants, contracts
+│   ├── architecture.md    # 架构规格
+│   └── experiments.md     # 实验与对局记录
+├── AGENTS.md              # 面向 agent 的命令、不变量、契约
 └── README.md
 ```
+
+`runs/`（权重）、`logs/`（对局记录）与 `session-*.md` 均被 git 忽略；数据在
+`ResNet/data/shards_evals`，由 `Kit/planes19/build` 构建。
 
 `runs/` (checkpoints), `logs/` (match traces, PGNs, metrics) and `session-*.md` (local AI session
 exports) are git-ignored.
@@ -203,36 +165,20 @@ exports) are git-ignored.
 ### UCI Engine
 
 ```bash
-/home/jeefy/miniconda3/envs/unichess/bin/python uci.py \
-  --ckpt runs/stratified_p4_selfplay_corrected/best_model.pt \
-  --mcts-sims 2400 \
-  --device cuda \
-  --book data/opening_book.bin
-```
-
-### Self-Play RL (Stage P4 corrected recipe)
-
-```bash
-/home/jeefy/miniconda3/envs/unichess/bin/python tools/gumbel_selfplay_corrected.py \
-  --ckpt runs/stratified_p1_opening/best_model.pt \
-  --num-games 100 \
-  --sims 800 \
-  --lr 5e-6 \
-  --grad-accum 4 \
-  --device cuda
+cd ~/UniChess && /home/jeefy/miniconda3/envs/unichess/bin/python -m Kit uci Transformer/engine.py \
+  --preset max_mcts
 ```
 
 ### Training
 
 ```bash
-/home/jeefy/miniconda3/envs/unichess/bin/python -u unichess_t/train/train.py \
-  --preset stratified_20m \
-  --data-dir /home/jeefy/UniChess/data/shards_evals \
-  --checkpoint-dir runs/stratified_20m \
-  --batch-size 1024 \
-  --precision bf16 \
-  --num-workers 4
+cd ~/UniChess && /home/jeefy/miniconda3/envs/unichess/bin/python -m Kit train \
+  Transformer/configs/t20m.json
 ```
+
+中断后用同一命令接着跑（`out` 目录里的 `latest.pt` 记着配置哈希，不符会拒绝续训）。
+自对弈换代循环是 `python -m Kit loop <config.json>`，配方由 R6 阶段的
+`Transformer/configs/loop_*.json` 提供。
 
 ### Server Service
 

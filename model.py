@@ -1,7 +1,16 @@
-"""SOTA Chess Transformer architecture with 2D relative position bias and bilinear policy head."""
+"""T 的模型结构：ConvStem + 2D 相对位置偏置 + 双线性策略头 + WDL 价值头 + MLH 头，
+以及按阶段路由的三专家集合 ``StratifiedChessTransformer``。
+
+由 ``unichess_t/model/transformer.py`` 平移而来，**state_dict 键名一个字节都没改**
+（旧检查点照常加载；``StratifiedChessTransformer`` 同时注册 ``opening/…`` 与
+``experts.N/…`` 两组键，参数量按去重后的 61,031,064 计）。
+
+要改结构先想清楚三件事：``cfg`` 会进检查点、``cfg_conflicts`` 靠它判结构是否变化、
+Server 的 ``models/T`` 与训练配方都指着这里的预设名。训练循环与损失在 Kit 里。
+"""
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass
+from dataclasses import asdict, dataclass, fields, replace
 import math
 from pathlib import Path
 from typing import Literal
@@ -436,94 +445,146 @@ class StratifiedChessTransformer(nn.Module):
 
 
 # Presets
+# Presets：**配置是唯一真相**，工厂只是它的快捷方式。新代码（kit 适配器、训练配置）
+# 一律用 ``PRESET_CONFIGS[name]`` 拿 TransformerConfig，不要直接调工厂——工厂返回的是模型，
+# 而训练路径要先有 cfg 才能判结构冲突、写导出权重。
+_PRESET_SPECS: dict[str, dict] = {
+    "transformer_tiny":   dict(d_model=192, num_layers=6,  num_heads=6,  d_ff=768),
+    "transformer_small":  dict(d_model=256, num_layers=8,  num_heads=8,  d_ff=682),
+    "transformer_medium": dict(d_model=384, num_layers=10, num_heads=12, d_ff=1024),
+    "transformer_large":  dict(d_model=512, num_layers=12, num_heads=16, d_ff=1152),
+    # 11 层 / 384 / 12 头，SwiGLU 的 d_ff=1024 对应旧式 2 矩阵 MLP 的 hidden_dim=1536
+    # （参数 footprint 相同，约 20.2M）
+    "transformer_20m":    dict(d_model=384, num_layers=11, num_heads=12, d_ff=1024, hidden_dim=1536),
+    "transformer_50m":    dict(d_model=512, num_layers=17, num_heads=16, d_ff=1160, hidden_dim=2048),
+}
+
+PRESET_CONFIGS: dict[str, TransformerConfig] = {
+    name: TransformerConfig(**spec) for name, spec in _PRESET_SPECS.items()
+}
+#: 分层集合里每个专家的结构就是 20M
+STRATIFIED_CFG = PRESET_CONFIGS["transformer_20m"]
+
+
+def _preset_cfg(name: str) -> TransformerConfig:
+    if name not in PRESET_CONFIGS:
+        raise KeyError(f"没有模型预设 {name!r}（可选：{', '.join(PRESET_CONFIGS)}）")
+    return PRESET_CONFIGS[name]
+
+
 def transformer_tiny(**kwargs) -> ChessTransformer:
     """6 layers, d_model=192, 6 heads (~3.8M params)."""
-    cfg = TransformerConfig(
-        d_model=192,
-        num_layers=6,
-        num_heads=6,
-        d_ff=768,
-        d_p=64,
-        **kwargs,
-    )
+    cfg = replace(_preset_cfg("transformer_tiny"), **kwargs)
     return ChessTransformer(cfg)
 
 
 def transformer_small(**kwargs) -> ChessTransformer:
     """8 layers, d_model=256, 8 heads (~6.7M params) - Default recommended."""
-    cfg = TransformerConfig(
-        d_model=256,
-        num_layers=8,
-        num_heads=8,
-        d_ff=682,
-        d_p=64,
-        **kwargs,
-    )
+    cfg = replace(_preset_cfg("transformer_small"), **kwargs)
     return ChessTransformer(cfg)
 
 
 def transformer_medium(**kwargs) -> ChessTransformer:
     """10 layers, d_model=384, 12 heads (~18.4M params)."""
-    cfg = TransformerConfig(
-        d_model=384,
-        num_layers=10,
-        num_heads=12,
-        d_ff=1024,
-        d_p=64,
-        **kwargs,
-    )
+    cfg = replace(_preset_cfg("transformer_medium"), **kwargs)
     return ChessTransformer(cfg)
 
 
 def transformer_large(**kwargs) -> ChessTransformer:
     """12 layers, d_model=512, 16 heads (~35M params)."""
-    cfg = TransformerConfig(
-        d_model=512,
-        num_layers=12,
-        num_heads=16,
-        d_ff=1152,
-        d_p=64,
-        **kwargs,
-    )
+    cfg = replace(_preset_cfg("transformer_large"), **kwargs)
     return ChessTransformer(cfg)
 
 
 def transformer_20m(**kwargs) -> ChessTransformer:
     """11 layers, d_model=384, num_heads=12, hidden_dim=1536 (~20.2M params)."""
-    hidden_dim = kwargs.pop("hidden_dim", 1536)
-    # In SwiGLU, 3 matrices of d_ff=1024 match the 2-matrix standard MLP parameter footprint of hidden_dim=1536 (~20.2M params)
-    d_ff = kwargs.pop("d_ff", 1024 if hidden_dim == 1536 else hidden_dim)
-    cfg = TransformerConfig(
-        d_model=384,
-        num_layers=11,
-        num_heads=12,
-        d_ff=d_ff,
-        hidden_dim=hidden_dim,
-        d_p=64,
-        **kwargs,
-    )
+    cfg = replace(_preset_cfg("transformer_20m"), **kwargs)
     return ChessTransformer(cfg)
 
 
 def transformer_50m(**kwargs) -> ChessTransformer:
     """17 layers, d_model=512, num_heads=16, hidden_dim=2048 (~49.7M params)."""
-    hidden_dim = kwargs.pop("hidden_dim", 2048)
-    d_ff = kwargs.pop("d_ff", 1160 if hidden_dim == 2048 else hidden_dim)
-    cfg = TransformerConfig(
-        d_model=512,
-        num_layers=17,
-        num_heads=16,
-        d_ff=d_ff,
-        hidden_dim=hidden_dim,
-        d_p=64,
-        **kwargs,
-    )
+    cfg = replace(_preset_cfg("transformer_50m"), **kwargs)
     return ChessTransformer(cfg)
 
 
 def stratified_20m(**kwargs) -> StratifiedChessTransformer:
     """Stratified ensemble of 3 x 20M phase experts (~60.8M total params, ~20.2M active per position)."""
     return StratifiedChessTransformer(**kwargs)
+
+
+
+def cfg_conflicts(saved: dict, cfg: TransformerConfig) -> list[str]:
+    """比对 checkpoint 里存的 cfg 与当前 cfg，返回所有不一致处（空列表 = 可以加载）。
+
+    与 R 的 ``cfg_conflicts`` 同规则：共有字段逐个相等；checkpoint 缺的字段当前值必须等于
+    默认值（默认值 = 旧结构）；checkpoint 有、当前没有的字段一律算冲突（往回退版本）。
+    不能直接 ``saved == cfg.__dict__``——TransformerConfig 加过字段，老检查点没有那些 key，
+    字典相等会让每个旧 run 都加载失败，而结构其实没变。
+    """
+    defaults = {f.name: f.default for f in fields(TransformerConfig)}
+    cur = asdict(cfg)
+    out: list[str] = []
+    for k in sorted(set(saved) | set(cur)):
+        if k not in cur:
+            out.append(f"{k}: checkpoint 有（={saved[k]!r}），当前 TransformerConfig 已无此字段")
+        elif k not in saved:
+            if cur[k] != defaults.get(k):
+                out.append(f"{k}: checkpoint 无此字段（等同默认值 "
+                           f"{defaults.get(k)!r}），当前为 {cur[k]!r}")
+        elif saved[k] != cur[k]:
+            out.append(f"{k}: checkpoint={saved[k]!r}，当前={cur[k]!r}")
+    return out
+
+
+def count_params(model: nn.Module) -> dict[str, int]:
+    """按顶层模块统计参数量（``StratifiedChessTransformer`` 只算去重后的真实数量）。"""
+    groups: dict[str, int] = {}
+    for name, p in model.named_parameters():
+        top = name.split(".")[0]
+        groups[top] = groups.get(top, 0) + p.numel()
+    groups["TOTAL"] = sum(p.numel() for p in model.parameters())
+    return groups
+
+
+def _clean_state_dict(sd: dict) -> dict:
+    """去掉 ``_orig_mod.`` 前缀（torch.compile 保存的检查点）。"""
+    return {k.removeprefix("_orig_mod."): v for k, v in sd.items()}
+
+
+def load_model(ckpt_path, device="cpu") -> tuple[nn.Module, TransformerConfig, int, dict]:
+    """按 checkpoint 内容选结构并加载权重 → (eval 模式模型, cfg, step, 原始 checkpoint)。
+
+    * ``preset == "stratified_20m"`` 或 state_dict 里出现 ``experts.`` / ``opening.`` 前缀
+      → ``StratifiedChessTransformer``（三专家）；
+    * 否则 ``ChessTransformer``，cfg 用 checkpoint 里的字段重建。
+
+    **只许缺 ``mlh_head.*``**：P3 之前的检查点没有 moves-left 头（推理不用它），其余键名或
+    形状对不上一律报错——静默跳过会让推理悄悄用随机权重，那比直接报错难查得多。
+    """
+    p = Path(ckpt_path)
+    if not p.exists():
+        raise FileNotFoundError(f"权重不存在：{p}")
+    ckpt = torch.load(p, map_location=device, weights_only=False)
+    if not isinstance(ckpt, dict):
+        raise ValueError(f"{p} 不是 T 的 checkpoint（顶层不是 dict）")
+    sd = ckpt.get("model", ckpt.get("state_dict", ckpt))
+    if not isinstance(sd, dict):
+        raise ValueError(f"{p} 里没有 model state_dict")
+    sd = _clean_state_dict(sd)
+    stratified = (ckpt.get("preset") == "stratified_20m"
+                  or any(k.startswith(("experts.", "opening.", "middlegame.", "endgame."))
+                         for k in sd))
+    if stratified:
+        model, cfg = stratified_20m(), STRATIFIED_CFG
+    else:
+        cfg = TransformerConfig.from_dict(ckpt.get("cfg", {}) or {})
+        model = ChessTransformer(cfg)
+    missing, unexpected = model.load_state_dict(sd, strict=False)
+    real_missing = [k for k in missing if "mlh_head." not in k]
+    if real_missing or unexpected:
+        raise ValueError(f"{p} 与当前结构不符：缺 {real_missing[:4]}，多 {unexpected[:4]}")
+    return model.eval(), cfg, int(ckpt.get("step", 0)), ckpt
 
 
 PRESETS = {
@@ -537,6 +598,11 @@ PRESETS = {
 }
 
 
+def preset_config(name: str) -> TransformerConfig:
+    """预设名 → ``TransformerConfig``（训练适配器与配置校验都用这个）。"""
+    return _preset_cfg(name)
+
+
 def create_transformer(preset_name: str = "transformer_small", init_from: str | Path | None = None, **kwargs) -> nn.Module:
     if preset_name not in PRESETS:
         raise ValueError(f"Unknown preset: {preset_name}. Available: {list(PRESETS.keys())}")
@@ -547,6 +613,6 @@ def create_transformer(preset_name: str = "transformer_small", init_from: str | 
         elif hasattr(model, "load_state_dict"):
             ckpt = torch.load(init_from, map_location="cpu", weights_only=False)
             sd = ckpt["model"] if isinstance(ckpt, dict) and "model" in ckpt else ckpt
-            clean_sd = {k.removeprefix("_orig_mod."): v for k, v in sd.items()}
+            clean_sd = _clean_state_dict(sd)
             model.load_state_dict(clean_sd, strict=False)
     return model

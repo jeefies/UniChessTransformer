@@ -1,0 +1,37 @@
+{
+  "task": {
+    "factory": "Transformer.kit:make_task",
+    "kwargs": {
+      "stratified": true,
+      "base_ckpt": "/home/jeefy/UniChess/Transformer/runs/stratified_p3_pretrain/best_model.pt",
+      "trainable_expert": "middlegame",
+      "data": {
+        "kind": "curriculum",
+        "repair_castling": false,
+        "shards": {"dir": "/home/jeefy/UniChess/ResNet/data/shards_evals",
+                   "pattern": "evals_*.bin"},
+        "batch_size": 512,
+        "filter": "middlegame",
+        "chunk_size": 65536,
+        "score_microbatch": 2048,
+        "score_lambda": 1.0
+      },
+      "loss": {"kind": "t_chess", "policy_weight": 1.0, "promo_weight": 0.1, "wdl_weight": 1.0}
+    }
+  },
+  "out": "/home/jeefy/UniChess/Transformer/runs/stratified_middlegame_v2",
+  "steps": 10000,
+  "accum": 1,
+  "seed": 42,
+  "device": "cuda",
+  "precision": "bf16",
+  "grad_scaler": false,
+  "clip": 1.0,
+  "nonfinite": "raise",
+  "optimizer": {"lr": 0.0002, "weight_decay": 0.0001, "betas": [0.9, 0.999], "fused": false},
+  "schedule": {"kind": "cosine", "t_max": 10000, "eta_min": 1e-05},
+  "runtime": {"num_workers": 4},
+  "log_every": 50,
+  "save_every": 1000,
+  "export": {"best": "best_model.pt", "final": "latest_checkpoint.pt", "every": 1000}
+}

@@ -5,7 +5,7 @@
 UniChessTransformer (Model T) is a neural chess engine built on Transformer backbones with 2D
 spatial geometric priors. It combines a bilinear square-to-square policy head, a Win-Draw-Loss
 (WDL) value head, an optional Moves-Left (MLH) head, phase-stratified expert routing, and a
-C++-accelerated batched Monte Carlo Tree Search (MCTS) with native Syzygy tablebase probing.
+batched PUCT tree search with Syzygy tablebase probing, provided by UniChessKit.
 
 This document is the single source of truth for architecture. For match results and training
 history see [`experiments.md`](experiments.md); for build/run commands see the root
@@ -16,7 +16,7 @@ history see [`experiments.md`](experiments.md); for build/run commands see the r
 ## 2. Model Hierarchy & Tiers
 
 Parameter counts below are measured, not estimated (verified against the current
-`unichess_t/model/transformer.py`).
+`model.py`; `python -m unittest Transformer.tests.test_r3` re-checks them).
 
 | Preset | Layers | $d_{\text{model}}$ | Heads | $d_{\text{ff}}$ | Params (measured) | Primary Role |
 | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -34,8 +34,9 @@ approximately 3 x 20.3M, confirming that the three experts hold the bulk of the 
 > **Checkpoint note:** a saved `stratified_20m` state dict contains *both* `opening.*` /
 > `middlegame.*` / `endgame.*` keys **and** `experts.0/1/2.*` keys. These are aliases of the
 > same modules (`self.experts = nn.ModuleList([self.opening, self.middlegame, self.endgame])`,
-> `unichess_t/model/transformer.py:316`), so counting raw state-dict entries yields ~122M — roughly double
-> the real 61.0M parameter count. The loader (`_load_state_dict`) tolerates either naming.
+> `model.py`), so counting raw state-dict entries yields ~122M — roughly double the real
+> 61.0M parameter count. The loader (`Transformer.model.load_model`) tolerates either naming,
+> plus the `_orig_mod.` prefix that `torch.compile` checkpoints carry.
 
 ---
 
@@ -100,15 +101,16 @@ The scalar evaluation used by search is $Q = P(\text{Win}) - P(\text{Loss}) \in 
 ### 3.5 Moves-Left Head (MLH, added in Stage P3)
 
 An optional auxiliary head predicts the number of moves remaining until game end, from a
-two-layer MLP on the `[CLS]` token (`unichess_t/model/transformer.py:220`):
+two-layer MLP on the `[CLS]` token (`model.py`):
 
 $$\hat{m} = \text{Linear}_{64 \to 1}\big(\text{SiLU}(\text{Linear}_{d \to 64}(\mathbf{h}_{\text{CLS}}))\big)$$
 
 - Activated via `return_mlh=True` in the forward pass.
 - Trained with Smooth-L1 loss against pseudo moves-left targets derived from the evaluation
-  shards (`unichess_t/model/loss.py`, `mlh_weight = 0.05`).
-- Present in every expert since Stage P3. **Checkpoints predating P3 lack `mlh_head` keys and
-  cannot be loaded by the current architecture** — see the compatibility note in
+  shards (`Kit/planes19/losses.py`, `mlh_weight = 0.05`).
+- Present in every expert since Stage P3. **Checkpoints predating P3 lack `mlh_head` keys**; the
+  loader tolerates exactly that one missing group and rejects anything else (a silently random
+  head is worse than a loud failure) — see the compatibility note in
   [`experiments.md`](experiments.md) §1.
 
 ---
@@ -127,64 +129,36 @@ and ply:
 Each expert is a full `transformer_20m` network. During batched inference, inputs are grouped by
 routed phase so each expert sees a contiguous batch, keeping GPU utilization high.
 
-Since Stage P3 each expert also carries its own `mlh_head`. When loading a checkpoint whose
-experts were trained separately, `_load_state_dict` broadcasts `experts[0].mlh_head` to the
-other experts if MLH weights are absent, so mixed-age checkpoints stay loadable.
+Since Stage P3 each expert also carries its own `mlh_head`. Batched input is grouped by routed
+phase so each expert sees a contiguous batch. When no board is supplied (kit's C++ PUCT hands over
+pre-encoded planes only) the expert is picked from the piece count in planes 0-11, which is what
+`StratifiedChessTransformer.forward` does when `boards` / `route_indices` are absent.
+
+The three curriculum recipes train **one expert at a time**: `Transformer.kit.make_task` freezes
+the other two experts' parameters (`Planes19Task.param_groups`) and still exports the full
+three-expert state dict, so the Server keeps loading the result the same way.
 
 ---
 
-## 5. Search Engines
+## 5. Search (UniChessKit)
 
-### 5.1 C++ MCTS (`unichess_t/search/cpp/`) — production path
+T no longer ships a search implementation. Every path — batch arenas, Server play, self-play —
+goes through UniChessKit's PUCT:
 
-A PyBind11 extension (`mcts_pybind.cpp` binding `mcts.hpp` + `chess_board.hpp`) providing
-batched PUCT tree search at **6,155+ sims/sec** on the reference GPU.
-
-- **Native bitboard move generator** with perft-verified legal move parity.
-- **19-plane feature encoding in C++**, so leaves are encoded without a Python round-trip.
-- **Batched GPU evaluation bridge**: leaf requests are queued and dispatched to the Python
-  network in saturated batches (default 64), with lock-free tree expansion.
-- **Leaf-level Syzygy 3-4-5 probing**: when an unexpanded node has $\le 5$ pieces, the traversal
-  probes the tablebase directly, returns the exact game-theoretic WDL, marks the node terminal,
-  and backs the value up the search path — no neural evaluation involved.
-
-#### Stage P2 search features
-
-| Feature | Parameter | Behaviour |
+| Implementation | Where | Notes |
 | :--- | :--- | :--- |
-| **Tree reuse** | `reuse` (bool) | After the opponent replies, the search descends the retained subtree via `reuse_root(move_uci)` instead of rebuilding from scratch, reusing all prior visit counts. |
-| **Dynamic FPU** | `c_fpu` (default 0.5) | First-play urgency for unvisited children is computed as `parent_q - c_fpu * sqrt(1 / (1 + parent_visits))` (`compute_fpu_q`, `mcts.hpp:114`), replacing the old fixed `fpu_reduction = 0.2`. |
-| **Contempt** | `contempt` (float) | Draws seen from the root are biased by `contempt / (1 + root_N)` during backup, discouraging premature draw acceptance. Zero disables it. |
+| `PUCTCpp` | `Kit/search/puct_cpp.py` + `Kit/search/_native/puct_native.cpp` | production; writes leaf encodings in C++, forwards planes to `Transformer.evaluator.TransformerEngine.evaluate_planes` |
+| `PUCT` | `Kit/search/puct.py` | reference; `PUCTCpp` is bitwise identical to it |
 
-### 5.2 Python MCTS (`unichess_t/search/mcts.py`) — fallback
+Both batch leaves **across games**, which is why the in-repo C++ MCTS (which owned its own search
+loop) was removed on the rebuild: it could not share a batch with another game, so the Server and
+the arena ended up with a second, slower search. Syzygy 3-4-5 probing is kit's `rules/tablebase.py`;
+openings are `Kit/rules/openings.py`.
 
-Batched PUCT search with virtual loss and Dirichlet noise. Used automatically when the C++
-extension is not compiled or fails to load, and by the Python-side API. Also exposes
-`MCTS.advance_root(root, move)` for tree reuse on the Python path.
-
-### 5.3 Multi-Process Parallel MCTS (`unichess_t/search/parallel_mcts.py`)
-
-Lock-free CPU worker processes feeding a central GPU batched evaluator over
-`multiprocessing.Queue` / `Pipe` channels. Peaks at **8,820 sims/sec** with 16 workers and batch
-size 64 (31.1x over a single worker). See [`experiments.md`](experiments.md) §2 for the full
-scaling sweep.
-
-```
-                    +-----------------------------+
-                    |      Central GPU Evaluator   |
-                    |  (RTX 5070 Ti, batches 64-512)|
-                    +--------------+--------------+
-                                   ^
-                       Requests    |    Results
-                       (Queue)     |    (Pipes)
-                                   v
-     +-----------------------------+-----------------------------+
-     |                             |                             |
-+----v-----+                 +----v-----+                 +----v-----+
-| Worker 1 |       ...       | Worker N |       ...       | Worker 16|
-| (sims)   |                 | (sims)   |                 | (sims)   |
-+----------+                 +----------+                 +----------+
-```
+`search_impl` selects the implementation (`"auto"` = C++ when it compiled, `"python"` forces the
+reference one) and is a *runtime* option, not part of the config hash. The C++ kernel is compiled
+on first use and cached under `~/.cache/unichess_kit/native/`; a failed compile raises instead of
+falling back, so a missing compiler can never silently halve throughput.
 
 ---
 
@@ -201,18 +175,19 @@ scaling sweep.
 
 ## 7. Engine & Server Contract
 
-`unichess_t/engine/engine.py` (`TransformerEngine`) wraps model + search + tablebase + opening book and is
-the shared inference entry point. The root `engine.py` adapts it to the UniChess Server
-`GameEngine` contract, caching one engine per
-`(ckpt, device, precision, syzygy_path, use_cpp_mcts, book_path)` so concurrent sessions share
-weights.
+`Transformer.evaluator.TransformerEngine` is the **batch forward only**: load a checkpoint, encode
+planes, return softmaxed `(policy, promo, wdl)`. The root `engine.py` exposes it to the UniChess
+Server through `Kit.serving.make_game_engine`, which implements the six-method `GameEngine`
+contract (termination, white-perspective eval, undo replay) for every engine that can hand kit a
+Player. Batch arenas and spectating use `KIT_FACTORY = "Transformer.kit:make_player_factory"`
+directly, so they run the native kit Player with cross-game batching.
 
-Move selection priority in `engine.py:engine_move()`:
+The loader in `Transformer.model.load_model` picks the architecture from the checkpoint itself
+(`preset == "stratified_20m"` or expert-prefixed keys → `StratifiedChessTransformer`, otherwise
+`ChessTransformer` with the saved `cfg`) and is strict except for `mlh_head.*`.
 
-1. Syzygy tablebase (exact)
-2. Polyglot opening book (`data/opening_book.bin`)
-3. MCTS search (C++ with Syzygy, else Python fallback)
-4. Raw network policy
+Move order is decided by kit's search; `config.json` presets map onto its parameters
+(`mcts_sims` → `simulations`, `mcts_batch` → `batch_size`).
 
 ### 7.1 Temperature and root narrowing
 
@@ -221,16 +196,10 @@ drawn from the finished search:
 
 $$p_i = \frac{N_i^{(1/t)}}{\sum_j N_j^{(1/t)}}$$
 
-over root **visit counts** (not the raw policy). `t <= 0` (C++: `t <= 0.01`) means greedy argmax
-over `N`; `t == 1` is proportional to visits; `t < 1` sharpens; `t > 1` flattens *past* the visit
-distribution and is **clamped to 1.0** by `GameEngine._clamp_temperature()` with a one-time
-warning. Sampling is seeded from OS entropy on the Server path, so `t > 0` genuinely varies.
-
-The Server-facing `GameEngine` owns the sampling in `_select_root_move()` rather than pushing a
-non-zero temperature into the search. It always asks the C++ search for a **greedy** move plus the
-root visit dict (`metrics["policy"]`, already returned by `mcts_pybind.cpp`), then samples that
-dict itself with `root_top_k` narrowing. This keeps the search deterministic and bounds variety:
-T can never select a move worse ranked than its K-th root move.
+over root **visit counts** (not the raw policy). `t <= 0` means greedy argmax over `N`; `t == 1`
+is proportional to visits; `t < 1` sharpens; `t > 1` flattens *past* the visit distribution and
+is **clamped to 1.0** by kit's `PUCTConfig` with a one-time warning. Sampling on the Server path
+is seeded from OS entropy, so `t > 0` genuinely varies between games.
 
 | Setting | Mean SF rank | Median | Outside SF top-5 |
 | :--- | :--- | :--- | :--- |
@@ -238,20 +207,21 @@ T can never select a move worse ranked than its K-th root move.
 | T (2400 sims), old `t=1.5`, no narrowing | 5.60 | 2.0 | 30 % |
 | T (2400 sims), **`t=1.0` + `root_top_k=3`** | **2.95** | 1.0 | 20 % |
 
-*Measured on 40 moves/config against Stockfish 19 with `Threads: 1` at 30k nodes —
-`Threads > 1` is **not** reproducible at a fixed node budget.* The old path was strictly
-harmful over-flattening, not a capability deficit: greedy T is at parity with R.
+*Measured on 40 moves/config against Stockfish 19 with `Threads: 1` at 30k nodes — `Threads > 1`
+is **not** reproducible at a fixed node budget.* The old path was strictly harmful
+over-flattening, not a capability deficit: greedy T is at parity with R. `root_top_k` narrows
+sampling to the K most visited root moves, so variety can never promote a badly ranked move.
 
-Presets that omit `temperature` inherit the `0.0` code default and therefore remain fully
+Presets that omit `temperature` inherit the `0.0` default and therefore remain fully
 deterministic. `root_top_k` defaults to `0` (no cap); the shipped `max_t` pair gives 5/5 distinct
 games vs M6 over 24 plies, diverging from ply 1.
 
 ### 7.2 Presets
 
 The Server discovers this repository through the symlink
-`~/UniChess/Server/models/T -> ~/UniChess/Transformer` and reads presets from
-`config.json`. Because the T engine resolves paths directly (no repo-root rebasing), **all paths
-in `config.json` must be absolute**.
+`~/UniChess/Server/models/T -> ~/UniChess/Transformer` and reads presets from `config.json`.
+Relative paths in the presets are resolved against this repository (`Transformer.kit._resolve`),
+unlike the old T plugin which resolved against the Server's working directory.
 
 | Preset | Sims | Batch | Temp | Top-K | Role |
 | :--- | :--- | :--- | :--- | :--- | :--- |

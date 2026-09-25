@@ -1,0 +1,42 @@
+{
+  "task": {
+    "factory": "Transformer.kit:make_task",
+    "kwargs": {
+      "cfg": "transformer_20m",
+      "stratified": false,
+      "data": {
+        "kind": "loader",
+        "repair_castling": false,
+        "shards": {"dir": "/home/jeefy/UniChess/ResNet/data/shards_evals",
+                   "pattern": "evals_*.bin",
+                   "slice": [null, -1]},
+        "batch_size": 1024
+      },
+      "loss": {"kind": "t_chess", "policy_weight": 1.0, "promo_weight": 0.1, "wdl_weight": 1.0},
+      "validation": {
+        "kind": "sequential",
+        "shards": {"dir": "/home/jeefy/UniChess/ResNet/data/shards_evals",
+                   "pattern": "evals_*.bin",
+                   "slice": [-1, null]},
+        "batch_size": 1024,
+        "batches": 50
+      }
+    }
+  },
+  "out": "/home/jeefy/UniChess/Transformer/runs/transformer_20m_v2",
+  "steps": 15000,
+  "accum": 1,
+  "seed": 42,
+  "device": "cuda",
+  "precision": "bf16",
+  "grad_scaler": false,
+  "clip": 1.0,
+  "nonfinite": "raise",
+  "optimizer": {"lr": 0.001, "weight_decay": 0.0001, "betas": [0.9, 0.999], "fused": false},
+  "schedule": {"kind": "cosine", "t_max": 15000, "eta_min": 1e-05},
+  "runtime": {"num_workers": 4, "pin_memory": true},
+  "log_every": 50,
+  "save_every": 1000,
+  "validate_every": 1000,
+  "export": {"best": "best_model.pt", "final": "final_model.pt", "every": 1000}
+}
