@@ -1,238 +1,51 @@
-# AGENTS.md
+# AGENTS.md — UniChess Transformer
 
-> **本文件尚未按重构后的布局重写**（全量重构 R0–R6 进行中）。下面大量条目描述的是已删除的
-> `unichess_t` 包、自带的 C++ MCTS、`train/` 脚本与 `tools/` 自对弈，**已失效**；动手前先读
-> 这一节，能用的信息以 `README.md`、`docs/architecture.md` 和实际存在的文件为准。
->
-> 重构后（当前 `rebuild` 分支，已推 GitHub）的真实情况：
->
-> - **仓库根即包**：`import Transformer`，import 根是 `~/UniChess`。文件只有
->   `model.py`（结构 + 三专家路由，state_dict 键名冻结）、`evaluator.py`（批量前向）、
->   `kit.py`（kit 接入：`make_player_factory` / `make_evaluators` / `make_task` /
->   `make_adapter` / `TTrainAdapter`）、`engine.py`（Server 插件，
->   `KIT_FACTORY="Transformer.kit:make_player_factory"`）、
->   `configs/{t20m,stratified_opening,stratified_middlegame,stratified_endgame,p3_mlh}.json`、
->   `tests/test_r3.py`。
-> - 旧 `unichess_t` 包（含自带的 C++ MCTS 与 Python MCTS）、`train/` 五个脚本、
->   `tools/`、`eval/`、`logs/`、`benchmark_transformer.py`、`uci.py` 已删除（git 历史可查）。
-> - **搜索不在本仓库**：所有对局走 kit 的 `PUCTCpp` / `PUCT`（`Kit/search/`），后者与 Python
->   版逐位一致、跨对局攒批。Syzygy 在 `Kit/rules/tablebase.py`，开局在
->   `Kit/rules/openings.py`。
-> - 训练走 kit：`python -m Kit train Transformer/configs/<name>.json`；口径与损失在
->   `Kit/planes19/`。curriculum 配方只训一个专家，其余冻结，导出仍是完整三专家权重。
-> - 单测：`cd ~/UniChess && python -m unittest Transformer.tests.test_r3`（17 项）。
->
-> 仍然有效的部分：模型分层与参数量、checkpoint 的 `experts.*` / `opening.*` 双键别名、
-> MLH 头与 P3 之前的兼容规则、`config.json` 预设的 `max_mcts` / `max_t` 语义与排序陷阱、
-> temperature 的实测数据（mean SF rank 表）。
+> 面向 AI 编码 agent。最后更新：2026-09-25（扁平化重构后）。
 
-## Overview
-High-performance neural chess engine combining Transformer backbones with 2D spatial geometric priors, bilinear square-to-square policy heads, Win-Draw-Loss (WDL) value heads, phase-stratified routing, and high-performance batched Monte Carlo Tree Search (MCTS) with C++ acceleration.
+## 仓库形态
 
-## Environment & Python Toolchain
-- **Conda Environment**: `/home/jeefy/miniconda3/envs/unichess/bin/python` (Python 3.12, PyTorch 2.x with CUDA 12.8 support). Always use this Python binary; do not assume system `python3` or `pytest`.
-- **Hardware Profile**: NVIDIA GeForce RTX 5070 Ti (16 GB VRAM).
-- **Core Dependencies**: `torch`, `python-chess` (`chess`), `numpy`. Note: `pytest` is not installed in the environment.
+**仓库根目录即包**：`import Transformer`，import 根是 `~/UniChess`（五个仓库的共同父目录）。
+仓库里只有这些能改的文件：
 
-## Execution & Verification Commands
-- **Run Full Unit Tests (13 tests)**:
-  ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python tests/test_all.py
-  ```
-- **Run C++ MCTS Dedicated Test Suite**:
-  ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python tests/test_cpp_mcts.py
-  ```
-- **Run Stage P2 Feature Tests** (tree reuse, dynamic FPU, contempt):
-  ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python tests/test_p2_features.py
-  ```
-- **Run Architectural Benchmark (Throughput & Latency)**:
-  ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python benchmark_transformer.py
-  ```
-- **Run MCTS Hyperparameter Simulation Search**:
-  ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python tools/hyperparam_search.py --rounds 5
-  ```
-- **Run Tactical Puzzle Benchmark**:
-  ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python eval/puzzle_bench.py --ckpt runs/stratified_p4_selfplay_corrected/best_model.pt --sims 100
-  ```
-- **Launch Training**:
-  ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python -u unichess_t/train/train.py \
-    --preset stratified_20m \
-    --data-dir /home/jeefy/UniChess/data/shards_evals \
-    --checkpoint-dir runs/stratified_20m \
-    --batch-size 1024 \
-    --precision bf16 \
-    --num-workers 4
-  ```
-- **Launch UCI Engine Interface**:
-  ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python uci.py --ckpt runs/stratified_p4_selfplay_corrected/best_model.pt --mcts-sims 2400 --device cuda --book data/opening_book.bin
-  ```
-- **Run Self-Play Pipeline (P4, corrected recipe)**:
-  ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python tools/gumbel_selfplay_corrected.py \
-    --ckpt runs/stratified_p1_opening/best_model.pt \
-    --num-games 100 \
-    --sims 800 \
-    --lr 5e-6 \
-    --grad-accum 4 \
-    --device cuda
-  ```
-  Use `tools/gumbel_selfplay.py` (original) or `tools/gumbel_selfplay_mixed.py` only for
-  reproduction/ablation — the corrected script is the one that produced the 10-0 result.
-- **Run Stage P4 Diagnostic Ablations**:
-  ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python tools/p4_diagnostic_experiments.py
-  ```
-- **Run Match Against Baseline (`chess_ai v2.0.0`)**:
-  ```bash
-  /home/jeefy/miniconda3/envs/unichess/bin/python eval/match_baseline.py \
-    --ckpt runs/stratified_p4_selfplay_corrected/best_model.pt \
-    --games 100 \
-    --sims 100 \
-    --baseline-seconds 0.25
-  ```
+| 文件 | 职责 |
+|---|---|
+| `model.py` | 结构 + 三专家路由。`state_dict` 的 `experts.*` / `opening.*` 前缀键名与重构前**逐字节兼容** |
+| `evaluator.py` | 特征前端（`evaluate_planes`，按 64 一批） |
+| `kit.py` | kit 接入：`make_player_factory` / `make_evaluators` / `make_task` / `make_adapter` / `TTrainAdapter` |
+| `engine.py` | Server 六方法插件（`KIT_FACTORY="Transformer.kit:make_player_factory"`） |
+| `configs/{t20m,stratified_opening,stratified_middlegame,stratified_endgame,p3_mlh}.json` | 训练口径 |
+| `tests/test_r3.py` | 单测（17 项） |
+| `docs/architecture.md` | 架构与模块说明 |
+| `__init__.py` | 包声明 |
 
-## Architecture & Conventions
+**已删除**（git 历史可查，勿 recreate）：`unichess_t/` 包（含自带的 C++ MCTS 与 Python MCTS）、
+`train/` 五个脚本、`tools/`、`eval/`、`logs/`、`benchmark_transformer.py`、`uci.py`。
 
-### Model Tiers
-- **Current Best Model**: `runs/stratified_p4_selfplay_corrected/best_model.pt` (Stratified 20M trained with P4 self-play + mixed data, LR=5e-6, grad_accum=4).
-- `stratified_20m` (`StratifiedChessTransformer`): 3 specialized ~20M expert networks dynamically dispatched by phase:
-  - Phase 0 (Opening): `piece_count >= 24` or `ply <= 20`
-  - Phase 1 (Middlegame): `12 < piece_count < 24`
-  - Phase 2 (Endgame): `piece_count <= 12`
-- `transformer_20m`: 11 layers, $d_{\text{model}}=384$, 12 heads, SwiGLU $d_{\text{ff}}=1024$ (~20.3M parameters).
-- `transformer_50m`: 17 layers, $d_{\text{model}}=512$, 16 heads, SwiGLU $d_{\text{ff}}=1160$ (~49.7M parameters). Deep tier.
-- Lightweight presets: `transformer_tiny` (~3.8M), `transformer_small` (~6.7M), `transformer_medium` (~18.5M), `transformer_large` (~35.1M).
+## 常用命令
 
-### Key Architectural Invariants
-- **Input Encoding (`unichess_t/core/encoding.py`)**: Canonical `(19, 8, 8)` float32 representation, oriented to the side to move (mirrored if Black to move).
-- **ConvStem + Tokens**: 3x3 Conv maps $(19, 8, 8) \to (d_{\text{model}}, 8, 8)$, flattened to 64 square tokens + 1 prepended `[CLS]` token (total 65 tokens). Decoupled learned 2D rank and file embeddings are added.
-- **SDPA Relative Position Bias**: Pairwise $(12, 64, 64)$ square-to-square attention bias is padded with zeros for `[CLS]` to $(1, 12, 65, 65)$ and passed directly into `F.scaled_dot_product_attention(..., attn_mask=attn_bias)` to leverage fused FlashAttention/SDPA kernels. Do not mutate attention matrices in-place with slicing.
-- **Bilinear Policy Head**: Projects 64 squares to queries $Q$ and keys $K$, computing move logits via $(Q K^T) / \sqrt{d_p} + \text{bias}_{\text{move}} \in \mathbb{R}^{B \times 64 \times 64}$, flattened to $(B, 4096)$. Decoupled promotion head predicts $(Q, R, B, N)$ for promotions.
-- **WDL Value Head**: MLP on `[CLS]` token predicting 3 classes: `[P(Win), P(Draw), P(Loss)]`. Scalar $Q = P(\text{Win}) - P(\text{Loss}) \in [-1, 1]$.
-- **Moves-Left Head (MLH)**: Auxiliary MLP on the `[CLS]` token — `Linear(d_model, 64) -> SiLU -> Linear(64, 1)` — predicting moves remaining. Enabled via `return_mlh=True`; trained with Smooth-L1 (`mlh_weight=0.05`). Present in every expert since Stage P3. **Checkpoints predating P3 lack `mlh_head` keys and fail to load** against the current `StratifiedChessTransformer`.
-- **Stratified checkpoint aliasing**: `StratifiedChessTransformer` registers `self.experts = nn.ModuleList([self.opening, self.middlegame, self.endgame])`, so saved state dicts contain *both* `opening/middlegame/endgame.*` and `experts.0/1/2.*` keys for the same modules. Counting raw state-dict entries therefore over-reports params ~2x; the real `stratified_20m` count is **61,031,064**.
+```bash
+cd ~/UniChess
+python -m Kit train Transformer/configs/t20m.json       # curriculum 配方同理
+python -m unittest Transformer.tests.test_r3            # 17 项
+python -m Kit match <config.json> --out runs/<name>/results.jsonl
+```
 
-### Dataset & Records (`unichess_t/model/dataset.py`)
-- Shards are 96-byte structured binary records (`RECORD_DTYPE`) located at `/home/jeefy/UniChess/data/shards_evals/evals_*.bin` (symlinked to `/home/jeefy/UniChess/ResNet/data/shards_evals`).
-- Memory-mapped reading (`np.memmap`) with vectorized bitboard decoding on batches.
+## 搜索不在本仓库
 
-### MCTS Search Engines
-- **C++ MCTS Integration (`unichess_t/search/cpp/`)**:
-  - High-performance C++ PyBind11 MCTS extension delivering **6,155+ sims/sec** batched tree search.
-  - Native leaf-level Syzygy 3-4-5 tablebase probing: positions with $\le 5$ pieces are probed directly during tree traversal, returning exact game-theoretic values without neural network evaluation.
-  - Python MCTS fallback: seamlessly falls back to Python batched MCTS (`unichess_t/search/mcts.py`) if C++ extension compilation/loading is unavailable.
-- **Stage P2 search features** (`unichess_t/search/cpp/mcts.hpp`, `mcts_pybind.cpp`):
-  - **Tree reuse** (`reuse`): after the opponent replies, descends the retained subtree via `reuse_root(move_uci)` instead of rebuilding, reusing all prior visit counts.
-  - **Dynamic FPU** (`c_fpu`, default 0.5): first-play urgency is `parent_q - c_fpu * sqrt(1/(1 + parent_visits))` via `compute_fpu_q`, replacing the old fixed `fpu_reduction = 0.2`.
-  - **Contempt** (`contempt`): biases root draws by `contempt / (1 + root_N)` during backup to discourage premature draw acceptance; `0.0` disables.
-- **Multi-Process Parallel MCTS (`unichess_t/search/parallel_mcts.py`)**: Lock-free worker processes communicating with central GPU batched evaluator; peaks at **8,820 sims/sec** (16 workers, batch 64).
+所有对局都走 kit 的 `PUCTCpp` / `PUCT`（`Kit/search/`），后者与 Python 实现整树逐位一致；
+Syzygy 桌库在 `Kit/rules/tablebase.py`，开局库在 `Kit/rules/openings.py`。
 
-### Head-to-Head Performance vs Model R
-- **Match Result**: Model T won **10-0** against Model R (`chess_ai` / ResNet 15x192) in a 10-game P4 self-play corrected championship match across 5 balanced opening pairs.
-- **Configuration**: Model T configured at 2400 MCTS simulations vs Model R at 800 simulations; Model T executed at **0.22s-0.29s/move** (parity with Model R's 0.21s-0.28s/move at 2400 sims due to C++ MCTS throughput).
-- **Previous Result**: Model T won **5.5 - 4.5** against Model R in the Stage 4 curriculum match (10 games, 2400 vs 800 sims).
+- **Curriculum 配方只训一个专家**（由 config 指定），另外两个从 `stratified_20m` 预训练
+  **冻结**导入，导出仍是完整三个专家权重。
+- 预训练权重早于 `mlh_head`：按新模型加载会缺键，`load_model` 只允许缺 `mlh_head.*`，
+  别的缺键一律报错。Server 侧用的是 `max_mcts` / `max_t` 预设。
+- `config.json` 预设的 `max_mcts` / `max_t` 语义与排序门槛见 `docs/architecture.md`。
+- 温度采样的实测数据（mean SF rank 表）仍在 `docs/experiments.md`。
 
-### Self-Play Pipeline (`tools/gumbel_selfplay_corrected.py`)
-- **Gumbel AlphaZero self-play RL pipeline** with C++ MCTS tree reuse.
-- **Phases**: (1) Self-play data collection, (2) Training on self-play positions, (3) Save updated model.
-- **P4 Corrected Recipe**: LR=5e-6, grad_accum=4, 30% mixed real/self-play data.
-- `tools/gumbel_selfplay.py` (original, LR=1e-4) regressed to 5.0-5.0 vs Model R — keep it only
-  for reproduction. `tools/gumbel_selfplay_mixed.py` is the intermediate mixed-data variant.
-  `tools/p4_diagnostic_experiments.py` holds the Exp A-E ablations that isolated the cause.
+## 架构概览
 
-### Tooling Inventory (`tools/`, `eval/`)
-- **Match runners vs Model R**: `run_match_T_vs_R.py`, `run_match_curriculum_T_vs_R.py`,
-  `run_match_aligned_curriculum_T_vs_R.py`, `run_match_p3_T_vs_R.py`, `run_match_p4_T_vs_R.py`;
-  `eval/match_p1_vs_r.py` for the P1 stage.
-- **Benchmarks**: `eval/puzzle_bench.py` (tactical suite), `eval/match_baseline.py` (vs
-  `chess_ai v2.0.0`), `eval/arena.py` (round-robin), `benchmark_transformer.py` (throughput),
-  `tools/hyperparam_search.py` (MCTS parameter grid search).
-
-### Documentation Map
-| File | Purpose |
-| :--- | :--- |
-| `README.md` | Project overview, features, benchmarks, quick start |
-| `docs/architecture.md` | Architecture specification (single source of truth) |
-| `docs/experiments.md` | Experimental records & stage-by-stage match history |
-| `AGENTS.md` | This file — commands, invariants, contracts |
-
-### Server Integration (`~/UniChess/Server`)
-- Model adapter integrated via symlink: `/home/jeefy/UniChess/Server/models/T -> /home/jeefy/UniChess/Transformer`.
-- Managed as systemd user service `unichess-server`:
-  ```bash
-  systemctl --user status unichess-server
-  systemctl --user restart unichess-server
-  ```
-- **`config.json` is the routing contract.** The Server loads it from `models/T/config.json`
-  (resolved through the symlink) via `models/__init__.py:resolve_kwargs(model_name, arg_name)`,
-  and instantiates `engine.py:GameEngine(**kwargs)`.
-  - **Two T presets**: `max_mcts` (production, fully deterministic) and `max_t` (same model /
-    search settings plus an exposed `temperature` key). `list_presets` returns sorted keys and the
-    frontend sets no explicit default, so it auto-selects `max_mcts` — **`max_t` is safe to add
-    only because `"max_mcts" < "max_t"` in sort order.** Any new preset sorting *before*
-    `max_mcts` would silently become the production route.
-  - **`temperature` defaults to 0.0** in `GameEngine.__init__` (`engine.py`), which keeps move
-    choice deterministic (argmax over root visits) and therefore leaves `max_mcts` byte-for-byte
-    unchanged. `max_t` ships at **`temperature=1.0` + `root_top_k=3`**; set either back to `0`
-    (and restart) to restore determinism.
-  - **Sampling semantics (measured, not assumed).** Root move choice samples the **visit
-    distribution** `N ** (1/t)`. `t <= 0` → greedy argmax, `t == 1` → proportional to visits,
-    `t < 1` → sharper than visits. `t > 1` is **clamped to 1.0** with a one-time warning, because
-    flattening *past* the visit distribution is strictly harmful (see the table below).
-  - **`root_top_k` is the quality guard.** After a greedy search, `GameEngine.engine_move()`
-    reads `metrics["policy"]` (the `{uci: visits}` dict the C++ search already returns) and does
-    the sampling itself, restricted to the `root_top_k` most-visited root moves. This bounds the
-    damage: T can never pick a move ranked worse than its K-th root move. Set `root_top_k=1` (or
-    `temperature=0`) for deterministic play.
-  - **Root cause of the 2026-09 "T weaker than R at temperature" report.** An earlier `max_t`
-    shipped at `t=1.5` with no narrowing. On 40 moves/config with a *reproducible* Stockfish 19
-    reference (`Threads: 1`, 30k nodes) T degraded to mean SF rank **5.60** versus R's **1.60**
-    (30% of moves outside SF's top-5). The same setting after the fix is **2.95**. Greedy T
-    (t=0) is at parity with R, so the regression was pure over-flattening, **not** a model
-    capability deficit.
-    | path | mean SF rank | median | outside SF top-5 |
-    | :--- | :--- | :--- | :--- |
-    | R 800 sims greedy | 1.60 | 1.0 | 0% |
-    | T 2400 sims, old t=1.5, no narrowing | 5.60 | 2.0 | 30% |
-    | T 2400 sims, **t=1.0 + `root_top_k=3`** | **2.95** | 1.0 | 20% |
-    A residual gap to R remains; lower `temperature` (e.g. 0.7 with `root_top_k=3`) to trade
-    variety back for strength.
-  - **Game-to-game variety** with the shipped setting is 5/5 distinct games vs M6 over 5 games
-    (24 plies), diverging from ply 1. A deterministic reference is required to measure this
-    reliably: Stockfish with `Threads > 1` is **not** reproducible at a fixed node budget, which
-    silently invalidated two earlier measurements in this session.
-  - Root move choice is sampled in `GameEngine._select_root_move()` (`engine.py`); the C++
-    `temperature=` argument is now passed `0.0` from the wrapper so the search itself stays
-    greedy and deterministic.
-  - Temperature is **not** in the `get_shared_engine` cache key, which is correct on the Server
-    path (it is a per-`search()` argument). Do not push it down into the shared `TransformerEngine`
-    without adding it to that key, or two presets will alias onto one cached engine.
-  - Priority-4 raw-network fallback (`_from_network`) still uses the shared engine's own
-    temperature (`0.0`), so it stays deterministic; it is only reached if both MCTS paths fail.
-  - **All paths in `config.json` must be absolute.** The T engine passes paths straight to
-    `Path()`/`torch.load()`, so a relative path resolves against the Server's
-    `WorkingDirectory` (`~/UniChess/Server`) and fails. Unlike the R engine, which rebases
-    relative paths against `RESNET_ROOT` via `_resolve_path`, T has no such rebasing.
-  - **Restart the service after editing `config.json`.** The Server caches the preset table
-    (`_config_cache`) and engine weights (`_SHARED_ENGINES`) per process, so a live process
-    keeps serving the previously loaded model until restarted.
-  - Current routing (2400 sims, batch 64, fp16 on CUDA, leaf Syzygy 3-4-5):
-    ```
-    $ python -c "import sys; sys.path.insert(0,'.'); \
-      from models import resolve_kwargs, list_presets; \
-      print(resolve_kwargs('T', list_presets('T')[0])['ckpt'])"
-    /home/jeefy/UniChess/Transformer/runs/stratified_p4_selfplay_corrected/best_model.pt
-    ```
-
-## Package layout & UniChessKit
-
-Library code lives in the `unichess_t` package (`core/ engine/ model/ search/ train/`); `eval/`, `tools/`, `tests/` stay at the repo root as scripts. The package name keeps T and ResNet (`unichess_r`) from colliding on `core`/`model`/`search` when both are loaded in one process (Server, batch arenas).
-
-Batch arenas / self-play go through UniChessKit (`jeefies/UniChessKit`): `unichess_t/kit_adapter.py:make_player_factory` wraps `TransformerEngine.evaluate_batch` (boards) and `evaluate_planes` (pre-encoded 19-plane tensors) as kit `BatchEvaluator`s; search is the kit PUCT with cross-game batching — by default the kit C++ `PUCTCpp` (bitwise identical to the Python `PUCT`, fed through `evaluate_planes`; `runtime: {"search_impl": "python"}` forces the Python one). The in-repo C++ MCTS is not used on that path. Example: `python -m unichess_kit.match match.json --out runs/<name>/results.jsonl`.
+Transformer 20M 引擎：平面编码 → Transformer 主干（2D 空间几何先验）→ 平方到平方双线性
+policy 头 + promo 专用头 + WDL 值头 + MLH 头；开局/中盘/残局三专家由**固定 phase-stratified
+路由**选择（不做学习的门控）。训练期数据、损失、调度器全在 kit（`Kit/planes19/` + `Kit/train/`）；
+批量对弈与观战走 kit 原生 Player（跨局攒批）。历史契约（对局复现性、eval 换算、
+GSPBT 口径）由 `Kit/tests/` 的回归测试接替。
