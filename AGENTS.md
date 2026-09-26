@@ -14,7 +14,8 @@
 | `kit.py` | kit 接入：`make_player_factory` / `make_evaluators` / `make_task` / `make_adapter` / `TTrainAdapter` |
 | `engine.py` | Server 六方法插件（`KIT_FACTORY="Transformer.kit:make_player_factory"`） |
 | `configs/{t20m,stratified_opening,stratified_middlegame,stratified_endgame,p3_mlh}.json` | 监督训练配方（复刻旧脚本口径） |
-| `configs/loop_p4.json` | 唯一一个换代循环配方（自对弈 RL，见「换代循环」一节） |
+| `configs/loop_p4.json` | 换代循环初版（200 局 / 40 对，无枚举搜索） |
+| `configs/loop_p4_v2.json` | 激进版（1024 局 / 256 对 / lr×步数枚举搜索） |
 | `tests/test_r3.py` | 单测（17 项） |
 | `docs/architecture.md` | 架构与模块说明 |
 | `__init__.py` | 包声明 |
@@ -27,7 +28,7 @@
 ```bash
 cd ~/UniChess
 python -m Kit train Transformer/configs/t20m.json       # curriculum 配方同理
-python -m Kit loop  Transformer/configs/loop_p4.json    # 自对弈换代循环（见下）
+python -m Kit loop  Transformer/configs/loop_p4_v2.json # 自对弈换代循环（见下）
 python -m unittest Transformer.tests.test_r3            # 17 项
 python -m Kit match <config.json> --out runs/<name>/results.jsonl
 ```
@@ -40,15 +41,25 @@ Syzygy 桌库在 `Kit/rules/tablebase.py`，开局库在 `Kit/rules/openings.py`
 ## 换代循环（自对弈 RL）
 
 ```bash
-cd ~/UniChess && python -m Kit loop Transformer/configs/loop_p4.json
+cd ~/UniChess
+python -m Kit loop Transformer/configs/loop_p4_v2.json   # 当前在跑的（激进版）
+python -m Kit loop Transformer/configs/loop_p4.json      # 初版（200 局 / 40 对 / 无枚举）
 ```
 
-- **只有一个 loop 配方**：`configs/loop_p4.json`（P4 口径：每代自对弈 200 局 800 sims →
-  70% 监督 + 30% 自对弈混合训练 → 候选对冠军 40 对 2400 sims，SPRT 判 H1 才换代）。
-  起点 `initial` 是 P4 冠军；输出只写 `runs/loop_p4/`，`loop_state.json` 可中断续跑。
+- **两个配方，训练口径相同（P4），差别在规模**：`loop_p4.json` 每代自对弈 200 局 800 sims
+  → 70% 监督（前 4 片）+ 30% 自对弈混合训练（lr 5e-6、accum 4、KL、1000 步、bf16）
+  → 候选对冠军 40 对 2400 sims，SPRT 判 H1 才换代。
+  `loop_p4_v2.json` 是**激进版**：自对弈 **1024 局**、arena **256 对** 且 `elo1=60`，
+  并且每代自对弈完成后做一次 **lr × 步数枚举搜索**（见 `Kit/pipelines/loop.py` 的
+  `train.variants`）：10 个变体各自训练到 `gen_XXXX/train_<label>/`，再与冠军各打 64 对
+  筛选赛，取 `score_a` 最高者进最终 arena。
+- 初版已跑满 8 代，结论见 `docs/experiments.md` §15：gen 0 换代成功，之后七代全"判不出"，
+  原因不是候选差而是 80 局分辨不出 +57~70 Elo；v2 就是按那些教训改的。
+  当前冠军 = `runs/loop_p4/gen_0000/train/final.pt`（v2 的 `initial` 指向它）。
 - **换代的唯一依据** 是 arena 的 SPRT 结论：判决 H1 才更新 `loop_state.json` 的 champion。
-  生产权重（`config.json` 的 `max_mcts` / `max_t` 预设指向 `runs/stratified_p4_selfplay_corrected/best_model.pt`）
-  **只能由人工切换**：改 `config.json` 一次提交 + 重启 `unichess-server`，loop 不许碰它。
+  生产权重（`config.json` 的 `max_mcts` / `max_t` 预设指向
+  `runs/stratified_p4_selfplay_corrected/best_model.pt`）**只能由人工切换**：
+  改 `config.json` 一次提交 + 重启 `unichess-server`，loop 不许碰它。
 - 与旧 `tools/gumbel_selfplay_corrected.py` 的**已知口径差异**（有意为之，别当 bug 查）：
   1. 自对弈每步都加 Dirichlet 噪声（kit `run_selfplay`），旧脚本只首步加；
   2. 混合数据按 batch 内比例切分（kit `data.kind:"mix"`），旧脚本是每 step 二选一；
@@ -57,9 +68,12 @@ cd ~/UniChess && python -m Kit loop Transformer/configs/loop_p4.json
      不进训练目标），旧脚本在开局 ply 照常搜索。
 - **训练与对局的精度不同**：`train` 段 `bf16`（与五个监督配方一致），`engine` 段 `fp16`
   （与 `config.json` 生产预设一致），两者绝不混用同一批前向。
-- 每一代要看的四个数：自对弈局面数与三类终止分布、policy/WDL loss 曲线、
+- 每一代要看的四个数：自对弈局面数与三类终止分布、各变体的筛选赛成绩与选中的 label、
   arena 分数与 SPRT 判决、墙钟。若自对弈 90%+ 三次重复，说明数据没多样性，
   先查 kit 的每局种子是否真的落到了 Player 的 RNG 上。
+- **暂停纪律**（对齐 SSM AGENTS §9）：连续 3 代未换代就停下复盘，**不放宽门槛**。
+  `loop_p4_v2.json` 目前没有自动暂停规则，只能人工 `kill`（`loop_state.json` 会接着续跑）。
+
 
 - **Curriculum 配方只训一个专家**（由 config 指定），另外两个从 `stratified_20m` 预训练
   **冻结**导入，导出仍是完整三个专家权重。

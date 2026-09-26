@@ -330,6 +330,63 @@ class TestConfigs(unittest.TestCase):
                              (2.0 * 6 + 20.0 * (1.0 - 0.0)) / 100.0])
         self.assertTrue(torch.allclose(got, want), (got, want))
 
+    def test_loop_p4_v2(self):
+        """激进版循环：1024 局自对弈 + lr×步数枚举搜索 + 256 对 arena。
+
+        与 loop_p4.json 的差别只在规模与枚举搜索；训练口径（P4）不变。
+        """
+        cfg = json.loads((ROOT / "configs" / "loop_p4_v2.json").read_text(encoding="utf-8"))
+        self.assertEqual(cfg["games"], 1024)
+        self.assertEqual(cfg["window"], 2)
+        self.assertEqual(cfg["selfplay"]["concurrency"], 32)
+        # initial 是已跑出来的冠军（gen 0 的候选），不是最初的生产权重
+        self.assertTrue(cfg["initial"].endswith(
+            "runs/loop_p4/gen_0000/train/final.pt"), cfg["initial"])
+        self.assertEqual(cfg["engine"]["kwargs"]["simulations"], 800)
+
+        train = cfg["train"]
+        variants = train["variants"]
+        labels = [v["label"] for v in variants]
+        self.assertEqual(len(labels), len(set(labels)))
+        # lr × steps 网格：5 个 lr × 2 个步数
+        self.assertEqual({v["optimizer"]["lr"] for v in variants},
+                         {1e-06, 2e-06, 5e-06, 1e-05, 2e-05})
+        self.assertEqual({v["steps"] for v in variants}, {600, 1200})
+        for v in variants:                      # 每个变体只覆盖 lr 与 steps
+            self.assertEqual(set(v) - {"label"}, {"optimizer", "steps"})
+            self.assertEqual(set(v["optimizer"]), {"lr"})
+        # 筛选赛：候选对冠军，2400 sims
+        self.assertEqual(train["screen"]["pairs"], 64)
+        self.assertEqual(train["screen"]["simulations"], 2400)
+        self.assertEqual(train["screen"]["openings"], "bundled")
+        # 最终 arena：256 对（512 局），elo1 收到 60（80 局判不出 +60 的教训）
+        self.assertEqual(cfg["arena"]["match"]["pairs"], 256)
+        self.assertEqual(cfg["arena"]["match"]["simulations"], 2400)
+        self.assertEqual(cfg["arena"]["match"]["sprt"]["elo1"], 60.0)
+        self.assertEqual(cfg["arena"]["gate"], {"kind": "sprt"})
+        # 训练口径与 loop_p4.json 一致（KL / accum 4 / bf16 / 前 4 片 / 自对弈 files）
+        kw = train["task"]["kwargs"]
+        self.assertEqual(kw["loss"]["policy_loss_type"], "kl_divergence")
+        self.assertEqual(train["accum"], 4)
+        self.assertEqual(train["precision"], "bf16")
+        self.assertEqual(kw["data"]["sources"][0]["shards"]["slice"], [0, 4])
+        self.assertEqual(kw["data"]["sources"][1]["shards"], {"files": "{selfplay_files}"})
+
+    def test_loop_p4_and_v2_differ_only_in_scale(self):
+        a = json.loads((ROOT / "configs" / "loop_p4.json").read_text(encoding="utf-8"))
+        b = json.loads((ROOT / "configs" / "loop_p4_v2.json").read_text(encoding="utf-8"))
+        for key in ("engine", "selfplay", "sink", "export"):
+            self.assertEqual(a[key], b[key], key)
+        self.assertEqual(a["train"]["task"], b["train"]["task"])
+        self.assertEqual(a["train"]["accum"], b["train"]["accum"])
+        self.assertEqual(a["train"]["precision"], b["train"]["precision"])
+        self.assertEqual(a["train"]["schedule"], b["train"]["schedule"])
+        # v2 只多了枚举搜索，训练模板其余一致
+        a_train = {k: v for k, v in a["train"].items() if k not in ("steps", "optimizer")}
+        b_train = {k: v for k, v in b["train"].items()
+                   if k not in ("steps", "optimizer", "variants", "screen")}
+        self.assertEqual(a_train, b_train)
+
     def test_loop_p4(self):
         """换代循环配方：钉死 P4 自对弈口径（30% 自对弈 + 70% 监督、lr 5e-6、KL）。
 
