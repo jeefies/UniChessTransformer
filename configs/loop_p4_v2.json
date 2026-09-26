@@ -23,7 +23,9 @@
   },
   "sink": {
     "factory": "Kit.planes19.sink:SelfPlayShardSink",
-    "kwargs": {"path": "{selfplay_dir}/selfplay.sp.bin"}
+    "kwargs": {
+      "path": "{selfplay_dir}/selfplay.sp.bin"
+    }
   },
   "train": {
     "task": {
@@ -40,7 +42,10 @@
               "shards": {
                 "dir": "/home/jeefy/UniChess/ResNet/data/shards_evals",
                 "pattern": "evals_*.bin",
-                "slice": [0, 4]
+                "slice": [
+                  0,
+                  4
+                ]
               },
               "repair_castling": false,
               "q_ratio": 0.0
@@ -71,34 +76,108 @@
     "precision": "bf16",
     "clip": 1.0,
     "nonfinite": "raise",
-    "optimizer": {"lr": 5e-06, "weight_decay": 0.0001, "betas": [0.9, 0.999], "fused": false},
-    "schedule": {"kind": "constant"},
-    "runtime": {"num_workers": 4, "pin_memory": true},
-    "export": {"best": "best_model.pt", "final": "final.pt"},
-
+    "optimizer": {
+      "lr": 5e-06,
+      "weight_decay": 0.0001,
+      "betas": [
+        0.9,
+        0.999
+      ],
+      "fused": false
+    },
+    "schedule": {
+      "kind": "constant"
+    },
+    "runtime": {
+      "num_workers": 4,
+      "pin_memory": true
+    },
+    "export": {
+      "best": "best_model.pt",
+      "final": "final.pt"
+    },
     "variants": [
-      {"label": "lr1e-6_s600",  "optimizer": {"lr": 1e-06}, "steps": 600},
-      {"label": "lr2e-6_s600",  "optimizer": {"lr": 2e-06}, "steps": 600},
-      {"label": "lr5e-6_s600",  "optimizer": {"lr": 5e-06}, "steps": 600},
-      {"label": "lr1e-5_s600",  "optimizer": {"lr": 1e-05}, "steps": 600},
-      {"label": "lr2e-5_s600",  "optimizer": {"lr": 2e-05}, "steps": 600},
-      {"label": "lr1e-6_s1200", "optimizer": {"lr": 1e-06}, "steps": 1200},
-      {"label": "lr2e-6_s1200", "optimizer": {"lr": 2e-06}, "steps": 1200},
-      {"label": "lr5e-6_s1200", "optimizer": {"lr": 5e-06}, "steps": 1200},
-      {"label": "lr1e-5_s1200", "optimizer": {"lr": 1e-05}, "steps": 1200},
-      {"label": "lr2e-5_s1200", "optimizer": {"lr": 2e-05}, "steps": 1200}
+      {
+        "label": "lr1e-6_s600",
+        "optimizer": {
+          "lr": 1e-06
+        },
+        "steps": 600
+      },
+      {
+        "label": "lr2e-6_s600",
+        "optimizer": {
+          "lr": 2e-06
+        },
+        "steps": 600
+      },
+      {
+        "label": "lr5e-6_s600",
+        "optimizer": {
+          "lr": 5e-06
+        },
+        "steps": 600
+      },
+      {
+        "label": "lr1e-5_s600",
+        "optimizer": {
+          "lr": 1e-05
+        },
+        "steps": 600
+      },
+      {
+        "label": "lr2e-5_s600",
+        "optimizer": {
+          "lr": 2e-05
+        },
+        "steps": 600
+      },
+      {
+        "label": "lr1e-6_s1200",
+        "optimizer": {
+          "lr": 1e-06
+        },
+        "steps": 1200
+      },
+      {
+        "label": "lr2e-6_s1200",
+        "optimizer": {
+          "lr": 2e-06
+        },
+        "steps": 1200
+      },
+      {
+        "label": "lr5e-6_s1200",
+        "optimizer": {
+          "lr": 5e-06
+        },
+        "steps": 1200
+      },
+      {
+        "label": "lr1e-5_s1200",
+        "optimizer": {
+          "lr": 1e-05
+        },
+        "steps": 1200
+      },
+      {
+        "label": "lr2e-5_s1200",
+        "optimizer": {
+          "lr": 2e-05
+        },
+        "steps": 1200
+      }
     ],
-
     "screen": {
       "pairs": 64,
       "seed": 20260926,
       "max_plies": 400,
       "concurrency": 8,
       "openings": "bundled",
-      "simulations": 2400
+      "simulations": 2400,
+      "workers": 2
     }
   },
-
   "export": "final.pt",
   "arena": {
     "match": {
@@ -108,8 +187,16 @@
       "concurrency": 8,
       "openings": "bundled",
       "simulations": 2400,
-      "sprt": {"elo0": 0.0, "elo1": 60.0, "alpha": 0.05, "beta": 0.1}
+      "sprt": {
+        "elo0": 0.0,
+        "elo1": 60.0,
+        "alpha": 0.05,
+        "beta": 0.1
+      },
+      "workers": 2
     },
-    "gate": {"kind": "sprt"}
+    "gate": {
+      "kind": "sprt"
+    }
   }
 }

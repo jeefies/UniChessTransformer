@@ -60,6 +60,17 @@ python -m Kit loop Transformer/configs/loop_p4.json      # 初版（200 局 / 40
   生产权重（`config.json` 的 `max_mcts` / `max_t` 预设指向
   `runs/stratified_p4_selfplay_corrected/best_model.pt`）**只能由人工切换**：
   改 `config.json` 一次提交 + 重启 `unichess-server`，loop 不许碰它。
+- **并发参数是实测枚举出来的（2026-09-26，5070 Ti），别再瞎调**：
+  - 自对弈 `concurrency 32` / `batch_size 64`：batch_size 64/128/256 都是 8.8 s/局，
+    concurrency 32/64 都是 8.5 s/局——GPU 已饱和，加并发或加批都不涨。
+  - 训练 `batch_size 512` / `num_workers 4`：workers 4→8 只快 1%，而 batch 1024 直接 OOM
+    （61M 三专家 + accum 4 的有效 batch 2048 已吃掉 12.5G）。1.76 步/s。
+  - **arena / 筛选赛 `workers 2`**：比 workers=1 快约 10%（33→29.6 s/局），3/4 反而回落到
+    30.2/30.8。concurrency 8/12/16 无差别。`workers>1` 时 SPRT 判决仍由父进程按已回传
+    记录给出，只是不承诺"停止时点"。
+  - 每代耗时构成：自对弈 2.4h + 变体训练约 1.4h + 10 场筛选赛约 10.5h + 最终 arena 约 4.2h。
+    筛选赛是大头（64 对 × 10 变体），而 128 局判一个变体的 SE 约 ±62 Elo，
+    对 10 个变体排序基本是噪声——真要压缩时间就先砍这里。
 - 与旧 `tools/gumbel_selfplay_corrected.py` 的**已知口径差异**（有意为之，别当 bug 查）：
   1. 自对弈每步都加 Dirichlet 噪声（kit `run_selfplay`），旧脚本只首步加；
   2. 混合数据按 batch 内比例切分（kit `data.kind:"mix"`），旧脚本是每 step 二选一；
