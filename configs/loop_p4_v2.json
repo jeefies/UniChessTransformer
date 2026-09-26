@@ -198,5 +198,6 @@
     "gate": {
       "kind": "sprt"
     }
-  }
+  },
+  "enumerate_generations": 3
 }

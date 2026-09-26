@@ -363,6 +363,7 @@ class TestConfigs(unittest.TestCase):
         self.assertEqual(train["screen"]["pairs"], 192)
         self.assertEqual(train["screen"]["simulations"], 800)
         self.assertEqual(train["screen"]["openings"], "bundled")
+        self.assertEqual(cfg["enumerate_generations"], 3)   # 前 3 代枚举，之后锁定冠军配置
         # 最终 arena：256 对（512 局）且仍是 2400 sims —— 换代的判定绝不为省时而降规格
         self.assertEqual(cfg["arena"]["match"]["pairs"], 256)
         self.assertEqual(cfg["arena"]["match"]["simulations"], 2400)

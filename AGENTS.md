@@ -53,6 +53,9 @@ python -m Kit loop Transformer/configs/loop_p4.json      # 初版（200 局 / 40
   并且每代自对弈完成后做一次 **lr × 步数枚举搜索**（见 `Kit/pipelines/loop.py` 的
   `train.variants`）：10 个变体各自训练到 `gen_XXXX/train_<label>/`，再与冠军各打 64 对
   筛选赛，取 `score_a` 最高者进最终 arena。
+  **只枚举前 3 代**（`enumerate_generations: 3`）：第 4 代起按上一代选中变体的配置直接训练，
+  不再打筛选赛，每代省约 9.3h。前三代的 `search.json` 就是"最优 lr×steps 是否稳定"的答案；
+  若稳定就照现在这样，若漂移再改成每 3 代枚举一次。
 - 初版已跑满 8 代，结论见 `docs/experiments.md` §15：gen 0 换代成功，之后七代全"判不出"，
   原因不是候选差而是 80 局分辨不出 +57~70 Elo；v2 就是按那些教训改的。
   当前冠军 = `runs/loop_p4/gen_0000/train/final.pt`（v2 的 `initial` 指向它）。
@@ -68,8 +71,9 @@ python -m Kit loop Transformer/configs/loop_p4.json      # 初版（200 局 / 40
   - **arena / 筛选赛 `workers 2`**：比 workers=1 快约 10%（33→29.6 s/局），3/4 反而回落到
     30.2/30.8。concurrency 8/12/16 无差别。`workers>1` 时 SPRT 判决仍由父进程按已回传
     记录给出，只是不承诺"停止时点"。
-  - 每代耗时构成：自对弈 4096 局约 9.7h + 变体训练约 1.4h + 10 场筛选赛（192 对 × 800 sims）
-    约 9.3h + 最终 arena（512 局 × 2400 sims）约 4.7h ≈ **25h/代**。
+  - 每代耗时构成（前 3 代，枚举中）：自对弈 4096 局约 9.7h + 变体训练约 1.4h +
+    10 场筛选赛（192 对 × 800 sims）约 9.3h + 最终 arena（512 局 × 2400 sims）约 4.7h
+    ≈ **25h/代**；第 4 代起锁定配置，只剩自对弈 + 1 次训练 + arena ≈ **15.8h/代**。
     筛选赛是大头，但它只决定"哪个变体进 arena"，判决靠最终 512 局，所以不为它省规格；
     真要压时间，砍变体个数（10 → 6）比砍筛选赛局数划算。
   - **自对弈局数与训练步数是配套的**：每步要抽 `steps × accum 4 × batch 512 × 0.3` 条自对弈记录，
