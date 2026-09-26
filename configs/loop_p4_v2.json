@@ -2,7 +2,7 @@
   "out": "/home/jeefy/UniChess/Transformer/runs/loop_p4_v2",
   "generations": 10,
   "initial": "/home/jeefy/UniChess/Transformer/runs/loop_p4/gen_0000/train/final.pt",
-  "games": 1024,
+  "games": 4096,
   "window": 2,
   "engine": {
     "root": "/home/jeefy/UniChess",
@@ -169,12 +169,12 @@
       }
     ],
     "screen": {
-      "pairs": 64,
+      "pairs": 192,
       "seed": 20260926,
       "max_plies": 400,
       "concurrency": 8,
       "openings": "bundled",
-      "simulations": 2400,
+      "simulations": 800,
       "workers": 2
     }
   },

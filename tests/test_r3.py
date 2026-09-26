@@ -336,7 +336,9 @@ class TestConfigs(unittest.TestCase):
         与 loop_p4.json 的差别只在规模与枚举搜索；训练口径（P4）不变。
         """
         cfg = json.loads((ROOT / "configs" / "loop_p4_v2.json").read_text(encoding="utf-8"))
-        self.assertEqual(cfg["games"], 1024)
+        # 4096 局：600 步变体抽 36.9 万条 / 54.5 万记录 = 0.7x，1200 步 1.4x，
+        # 两边都不陷入反复过拟合（1024 局时分别是 2.7x / 5.4x，正是初版 gen3/4 掉负 Elo 的原因）
+        self.assertEqual(cfg["games"], 4096)
         self.assertEqual(cfg["window"], 2)
         self.assertEqual(cfg["selfplay"]["concurrency"], 32)
         # initial 是已跑出来的冠军（gen 0 的候选），不是最初的生产权重
@@ -355,11 +357,13 @@ class TestConfigs(unittest.TestCase):
         for v in variants:                      # 每个变体只覆盖 lr 与 steps
             self.assertEqual(set(v) - {"label"}, {"optimizer", "steps"})
             self.assertEqual(set(v["optimizer"]), {"lr"})
-        # 筛选赛：候选对冠军，2400 sims
-        self.assertEqual(train["screen"]["pairs"], 64)
-        self.assertEqual(train["screen"]["simulations"], 2400)
+        # 筛选赛：候选对冠军，800 sims（与自对弈同档）+ 192 对。
+        # 实测 GPU 吞吐相同（约 1.2 万 positions/s），2400 sims 每局只多干 3.75 倍活；
+        # 降到 800 后同样墙钟能跑 3 倍局数，得分 SE 从 ±6.2% 降到 ±3.6%。
+        self.assertEqual(train["screen"]["pairs"], 192)
+        self.assertEqual(train["screen"]["simulations"], 800)
         self.assertEqual(train["screen"]["openings"], "bundled")
-        # 最终 arena：256 对（512 局），elo1 收到 60（80 局判不出 +60 的教训）
+        # 最终 arena：256 对（512 局）且仍是 2400 sims —— 换代的判定绝不为省时而降规格
         self.assertEqual(cfg["arena"]["match"]["pairs"], 256)
         self.assertEqual(cfg["arena"]["match"]["simulations"], 2400)
         self.assertEqual(cfg["arena"]["match"]["sprt"]["elo1"], 60.0)
