@@ -19,7 +19,7 @@
     "max_plies": 400,
     "concurrency": 32,
     "book_plies": 6,
-    "openings": "/home/jeefy/UniChess/Kit/data/openings.txt"
+    "openings": "/home/jeefy/UniChess/Kit/data/openings_sp.txt"
   },
   "sink": {
     "factory": "Kit.planes19.sink:SelfPlayShardSink",
@@ -163,7 +163,7 @@
       "seed": 20260926,
       "max_plies": 400,
       "concurrency": 8,
-      "openings": "bundled",
+      "openings": "/home/jeefy/UniChess/Kit/data/openings_sp.txt",
       "simulations": 800,
       "workers": 2
     }
@@ -175,7 +175,7 @@
       "seed": 20260926,
       "max_plies": 400,
       "concurrency": 8,
-      "openings": "bundled",
+      "openings": "/home/jeefy/UniChess/Kit/data/openings_sp.txt",
       "simulations": 2400,
       "sprt": {
         "elo0": 0.0,

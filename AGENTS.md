@@ -93,6 +93,12 @@ python -m Kit loop Transformer/configs/loop_p4.json      # 初版（200 局 / 40
       2e-6 从 −4.5 到 +21.7），把这一维撤掉换给 wd。
     - 网格含一个**代内对照** `ctrl_const_2e-5_wd4`（恒定 lr、上一代最优配置），
       用来区分"1cycle 的功劳"和"这一代数据/冠军变了"的影响。
+    - **开局库换成 2000 条合成线路**（Kit/data/openings_sp.txt）：arena / 筛选赛是
+      确定性对局（temperature=0、无 Dirichlet 噪声），开局线路数直接决定去重局数。
+      bundled 的 34 条跑 384 局时 distinct_games 只有约 276——**28% 的算力花在重复
+      样本上**。合成库 2000 条，384 局拿到 384 个不同开局。这些线路只为多样性服务、
+      不代表真实开局水准，双方走同一条所以比较仍公平；换库后 Elo 绝对值与旧库结果
+      不可直接比较，但每代换代判定本来就是独立的一次完整 arena。**不要改回 bundled。**
     - **迁移风险**：这两篇论文用的都是 SGD+momentum，且明说 Adam 这类自适应方法
       "不使用足够大的学习率、也不会出现 super-convergence"。我们是 AdamW，
       lr 2e-5 在 Adam 尺度里偏小，与论文里 0.05~3.0 的 SGD 大 lr 不是同一量纲，

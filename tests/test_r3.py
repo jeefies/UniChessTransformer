@@ -371,6 +371,7 @@ class TestConfigs(unittest.TestCase):
         # 筛选赛：候选对冠军，800 sims 192 对（SE 约 ±3.6%）
         self.assertEqual(train["screen"]["pairs"], 192)
         self.assertEqual(train["screen"]["simulations"], 800)
+        self.assertEqual(train["screen"]["workers"], 2)
         # 最终 arena：256 对 2400 sims，elo1=60（80 局判不出 +60 的教训）
         self.assertEqual(cfg["arena"]["match"]["pairs"], 256)
         self.assertEqual(cfg["arena"]["match"]["simulations"], 2400)
@@ -418,9 +419,15 @@ class TestConfigs(unittest.TestCase):
                          {"elo0": 0.0, "elo1": 40.0, "alpha": 0.05, "beta": 0.1})
         self.assertEqual(cfg["engine"]["kwargs"]["simulations"], 800)
         self.assertEqual(cfg["engine"]["kwargs"]["checkpoint"], "{weights}")
-        # 开局库路径必须绝对：loop 的三个子进程都以 <out> 为 cwd 运行
+        # 开局库路径必须绝对：loop 的三个子进程都以 <out> 为 cwd 运行。
+        # 用 2000 条合成库（Kit/data/openings_sp.txt）而不是 bundled 的 34 条——
+        # 确定性对局下线路数决定去重局数，384 局用 34 条会有 28% 重复样本。
         self.assertEqual(cfg["selfplay"]["openings"],
-                         "/home/jeefy/UniChess/Kit/data/openings.txt")
+                         "/home/jeefy/UniChess/Kit/data/openings_sp.txt")
+        self.assertEqual(cfg["train"]["screen"]["openings"],
+                         "/home/jeefy/UniChess/Kit/data/openings_sp.txt")
+        self.assertEqual(cfg["arena"]["match"]["openings"],
+                         "/home/jeefy/UniChess/Kit/data/openings_sp.txt")
         self.assertEqual(cfg["sink"]["kwargs"]["path"], "{selfplay_dir}/selfplay.sp.bin")
 
         kw = cfg["train"]["task"]["kwargs"]
