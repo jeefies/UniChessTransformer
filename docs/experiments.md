@@ -18,6 +18,9 @@
 > 12. [Curriculum Learning & Leaf Syzygy](#12-curriculum-learning-middlegame--endgame-c-mcts-leaf-level-syzygy-integration-and-championship-match-vs-model-r)
 > 13. [P4 Self-Play Training & Corrected Championship](#13-p4-self-play-training--corrected-championship-match-10-0-vs-model-r)
 > 14. [Head-to-Head Summary (All Stages)](#14-head-to-head-performance-vs-model-r-all-stages-summary)
+> 15. [换代循环 loop_p4：前 8 代实录](#15-换代循环-loop_p4前-8-代实录2026-09-26)
+> 16. [学习率计划与搜索维度：1cycle + lr×wd](#16-学习率计划与搜索维度-1cycle--lrwd-二维2026-09-27)
+> 17. [loop_p4_v2 gen 0：开局库、SPRT 判决漏洞与时间预算](#17-loop_p4_v2-gen-0开局库sprt-判决漏洞与时间预算2026-09-27)
 
 ---
 
@@ -638,7 +641,7 @@ A series of diagnostic experiments (`tools/p4_diagnostic_experiments.py`) identi
 ### 16.3 开局库：34 条 curated line 换成 2000 条合成 line
 
 这不是论文结论，是实测出来的浪费。arena / 筛选赛是**确定性对局**
-（	emperature=0、无 Dirichlet 噪声），所以开局线路数直接决定去重局数：
+（temperature=0、无 Dirichlet 噪声），所以开局线路数直接决定去重局数：
 
 | 开局库 | 线路数 | 384 局的 distinct_games |
 |---|---|---|
@@ -653,14 +656,19 @@ score_a，重复样本不增加信息、只让 SE 从 ±3.6% 涨到 ±4.2%。
 比较仍然公平。代价是 Elo 绝对值与旧库的结果不可直接比较——但每代的换代判定
 本来就是独立的一次完整 arena，不存在跨库比较。
 
-### 16.3 一条被证据推翻的设想
+> **2026-09-27 实测更正（见 §17.4）**：上表"384 局 0% 重复"只在 **arena** 上验证过。
+> gen 0 的十场筛选赛当时仍跑在 bundled 库上（循环进程启动时才读配置，见 §17.4），
+> 实测 duplicate_rate 0.27–0.375、只用掉 32 条线路。合成库对筛选赛同样生效，
+> 但那份数据不是它跑出来的，别把这行的数字引用到 gen 1 之前的筛选赛上。
+
+### 16.4 一条被证据推翻的设想
 
 曾考虑过"多周期衰减（SGDR）"，论文实测否掉了它（见上），而且 SGDR 自己说重启
 "often temporarily worsen performance"。我们每代只导出一个候选、还要过 256 对
 门槛，没有余裕去赌周期中点。要上也必须满足：**末轮加长并收到 0，且 incumbent 只取
 η_min 点**。
 
-### 16.4 迁移风险（必须记住）
+### 16.5 迁移风险（必须记住）
 
 两篇论文用的都是 **SGD + momentum**，而且 Smith & Topin 明说"Adam 这类自适应方法
 在有效时不使用足够大的学习率，也不会出现 super-convergence"。我们是 AdamW，
@@ -672,3 +680,165 @@ lr 2e-5 在 Adam 尺度里**偏小**（transformer 常见 1e-4~3e-4），和论�
 1911.08265 后**未证实**——全文 0 次出现 KL/Kullback/divergence，lr/optimizer/momentum/
 weight decay 都没写，附录 C 原话是"参数值请参考 pseudocode"，而 pseudocode 在
 ancillary files 里。该条不作为设计依据。）
+
+---
+
+## 17. loop_p4_v2 gen 0：开局库切换、SPRT 判决漏洞与时间预算（2026-09-27）
+
+§16 的三个决定（1cycle、lr × wd 二维、2000 条合成开局库）在这一代落进
+`configs/loop_p4_v2.json`。但 **gen 0 是个混合体**：它的十场筛选赛是旧网格 + 旧开局库
+跑完的，最终 arena 才用上新配方；gen 1 起才是完整的新配方。分开记，别混。
+
+### 17.1 最终 arena（合成开局库 / 2400 sims）
+
+`runs/loop_p4_v2/gen_0000/arena.jsonl`，2026-09-27 20:57→21:35（UTC+8），37.2 分钟：
+
+| 项 | 值 |
+|---|---|
+| 局数 | **101 / 512 计划**（48 完整对，SPRT 早停） |
+| 得分 | score_a **0.5594**：A 47 胜 / 19 和 / B 35 负 |
+| Elo | **+41.5**，CI95 [−19.3, +104.9]；五名法 Elo +47.3，CI95 [−4.8, +101.7] |
+| SPRT | llr **+1.471**（三名法 0.721），界 [−2.251, +2.890]，`min_pairs 8` → verdict **None** |
+| 换代判定 | `stopped_by_sprt: true`，但 `promote()` 返回 **False** |
+| 去重 | distinct_games 101 / duplicate_rate **0.0** |
+| 终止 | 将杀 82 / 子力不足 7 / 三次重复 12（12%），truncated 0.0 |
+| 其他 | mean_plies 143.1；A 执白 53 局 0.641、执黑 48 局 0.469；五名法 [4,3,24,10,7] |
+
+三条观察：
+
+1. **合成开局库在 arena 上兑现了**：101 局拿到 101 个不同开局（0 重复），换库前的预期
+   正是如此；三次重复占比 12% 也落在 §15 记的 11–14% 里——新库没有把数据多样性换坏。
+2. **筛选赛的 +125 Elo 没有兑现到 arena**（0.673 / +125.5 → 0.559 / +41.5）。两者标尺
+   不同（筛选赛 800 sims、arena 2400 sims），再叠加胜者诅咒（10 个变体取最大）。
+   §15.2 "筛选用 score_a 只决定谁进 arena、判决只认完整 arena"这条纪律是对的。
+3. **这一代记成"没换代"，但那是假阴性**——见下。
+
+### 17.2 "没换代"是假阴性：SPRT 判决用了两份不一致的快照
+
+`Kit/pipelines/match.py` 里，`_Run.add()` 每落一局就按**当时的记录集**判断该不该停
+（`run.stopped`），而 `run_match` 的汇总是拿**追加完在途对局后的最终记录集**重算
+`verdict`。两份快照一旦不一致，就会出现"该停、也停过、但判决没了"。
+
+用这一代的真实 `arena.jsonl` 复算（五名法、逐对）：
+
+| 时点 | 局数 | llr | 判决 |
+|---|---|---|---|
+| 第 85 局（40 对） | 85 | **+3.164** | 越过上界 2.890 → **H1**，`stopped=True` |
+| 第 101 局（48 对，最终记录） | 101 | **+1.471** | 退回界内 → **None** |
+
+也就是说：停止信号是在 H1 上触发的，但父进程把还在飞的几局（`workers=2`）落盘后，
+最终 llr 从 +3.164 掉回 +1.471，`verdict` 重算成 `None`，`promote()` 判 False。
+**候选其实是达到换代标准的**（score_a 0.559 / Elo +41.5 / CI 下限 −19.3），
+却记进了 `loop.jsonl` 的 `promoted: false`。
+
+为什么一直没暴露：**`workers=1` 没有在途对局**，停止时点和最终记录集是同一份。
+§15 的 loop_p4 初版跑满 8 代、gen 0 正常换代，用的正是 workers=1；换成
+`workers=2`（快约 10%，见 `AGENTS.md`）才把这条路径唤醒。这不是统计口径问题，
+是"早停时点的判决"和"收尾时的判决"被当成了同一个东西。
+
+### 17.3 修法与验证
+
+Kit `6f91bd6`（2026-09-27）：**判决在越界那一刻冻结**，不再拿最终记录集重算。
+
+- `_sprt_decided()` 改为返回 `(该停, 当时判决)`；
+- `_Run` 记下 `stopped_verdict`，`add()` 在越界时捕获；续跑（读回已完成记录）同样冻结；
+- `summary` 里若 `stopped_verdict` 非空则覆盖重算值。
+
+这是标准 SPRT 语义（越界即停，alpha/beta 就是按边界值设计的），代价是判决比
+"用全部记录重算"略激进——而那正是 alpha=0.05 买到的性质，不是放宽门槛。
+
+验证：
+
+- 单元回归 2 项：`test_sprt_verdict_is_frozen_at_boundary`（8 对 A 全胜把 llr 推过
+  上界，再接 86 对一胜一负把最终 llr 拉回 **−0.082**（界内），断言冻结值仍为 H1、
+  重算值为 None）；`test_sprt_stopped_always_has_a_verdict`（不变式：停了就必须有判决）。
+- 远端全量 **314 项 OK**；并用 gen 0 的真实 `arena.jsonl` 复算确认打补丁后
+  `verdict = H1`（下表）。
+
+| 口径 | verdict | 后果 |
+|---|---|---|
+| 打补丁前（重算） | None | `promote()` = False（已发生的假阴性，无法追溯改写） |
+| 打补丁后（冻结） | **H1** | `promote()` = True |
+
+**gen 0 的那次换代机会已经永久丢了**——`loop.jsonl` 里 `promoted: false` 已落盘，
+补丁不追溯。缓解事实：那个候选是拿 **1024 局**旧数据 + 恒定 lr 训的（§15 第 3 条说的
+"每条记录被抽 23 次"正是它），4096 局的新数据从 gen 1 才开始。要不要重打 gen 0 的
+arena 由人决定，脚本不主动碰。
+
+**部署方式值得记住**：loop 的 selfplay/train/arena/screen 都是 `Kit` 子进程
+（`Kit/pipelines/loop.py` 的 `_run`），所以**改 Kit 只影响后续拉起的子进程**。
+这次是"远端 pull Kit → gen 1 的 arena 自动用新代码"，944/4096 局的自对弈一步没丢。
+（反过来，改 `configs/loop_p4_v2.json` **不会**影响已在跑的 loop 进程——见 17.4。）
+
+### 17.4 连带发现：gen 0 的筛选赛还在用旧开局库
+
+`loop_p4_v2.json` 里 `train.screen.openings` 和 `arena.match.openings` 都指向合成库，
+但 gen 0 的十场筛选赛实测还是 bundled：
+
+| 产物 | openings | distinct_games | duplicate_rate |
+|---|---|---|---|
+| `gen_0000/screen_*.jsonl`（10 场） | **bundled** | 240–280 | **0.27–0.375** |
+| `gen_0000/arena.jsonl` | 合成库 | 101 | **0.0** |
+
+原因不是配置漏写，而是**时序**：循环进程只在启动时读一次配置。时间线（UTC+8）：
+
+| 时刻 | 事件 |
+|---|---|
+| 09:2x | loop 以旧配置（10 个恒定 lr 变体、bundled 开局库）启动 |
+| 19:07 | `configs/loop_p4_v2.json` 在磁盘上更新为 8 个 1cycle 变体 + 合成库 |
+| 19:44 | 最后一场筛选赛仍按**内存里的旧配置**写出 `openings: bundled` |
+| 20:57 | 重启后的 loop 才用上新配置，跑完 gen 0 的 arena |
+
+所以 §16.3 表格里"合成库 384 局 0% 重复"目前**只有 arena 那 101 局为证**；
+筛选赛的 0.27–0.375 是 bundled 的真实水平。gen 1 起的筛选赛才会用上新库。
+
+bundled 下的实际形态：384 局只摊到 **32 条线路、每条正好 12 局**（库有 34 条），
+但因为每局种子不同，重复并非整局相同——最终是 267 个不同对局（duplicate_rate 0.305）。
+即"开局重复"和"整局重复"是两回事，五名法 SE 受损程度介于两者之间。
+
+### 17.5 这一代踩全的运维坑
+
+1. **`phase == "search"` 时不许重启 loop**：新配方 8 个 label 对上磁盘上 10 个 label 的
+   `search.json`，`_search_all()` 直接 `RuntimeError`。要重启只能趁 selfplay / arena 段。
+2. **配置哈希不一致是硬失败，不是自动重跑**：`Kit/pipelines/match.py` 对不上的结果文件
+   抛 `ValueError`。且 `run_match` **先写 header 再建 player**，崩溃残留的 header 会堵死
+   后续所有重试——gen 0 就留下过 `arena.jsonl.bad_checkpoint_20260927`
+   （header 里是 `train/final.pt`，哈希 `0c6ae0b4…` 对新配置的 `e3a578b5…`）。
+   删掉/改名残留文件即可恢复，但**排查成本全在"为什么它不自己重跑"上**。
+3. **Kit 续跑时的候选路径 bug**（`5dac905`）：`mapping()` 一律把 `{candidate}` 指到
+   `<gen>/train/<export>`，而枚举代的冠军在 `train_<label>/`；只有前进的 search 分支会
+   纠正它。于是 `phase == "arena"` 续跑 → `FileNotFoundError: .../gen_0000/train/final.pt`。
+4. **改 Kit 不用重启 loop（子进程热更新），改 loop 配置必须重启**——两者成本差一个自对弈
+   世代（约 9.6 h），动手前先想清楚要改的是哪一层。
+5. **`Kit match` 每局记录的 `elapsed_s` 不是墙钟**（实测虚高约两个数量级）。要墙钟只看
+   汇总的 `elapsed_s`。
+
+### 17.6 实测时间预算
+
+全部是本机 5070 Ti、这一代的墙上时间（不是估计值）：
+
+| 阶段 | 实测 | 本轮规模 | 耗时 |
+|---|---|---|---|
+| 自对弈 | **8.4 s/局** | 4096 局 | **9.6 h** |
+| 变体训练 | 1.65–1.89 步/s | 8 个 × 1200 步 | **1.5 h** |
+| 筛选赛 | 46–51 min/场 | 8 场 × 192 对（384 局）@800 sims | **7.3 h** |
+| 最终 arena | **22.1 s/局** | 512 局，SPRT 通常 ~101 局就停 | **0.6 h**（打满 3.1 h） |
+
+代际构成（`AGENTS.md` 的估算是打满 arena 的 23h，偏保守）：
+
+- **枚举代**（gen 1、2，`enumerate_generations: 3`）：9.6 + 1.5 + 7.3 + 0.6 ≈ **19 h**
+- **锁定代**（gen 3–9，不筛）：9.6 + 0.2 + 0.6 ≈ **10.4 h**
+
+从 gen 1 自对弈起步（09-27 21:35）算：gen 1 arena ≈ **+16.8 h**，gen 2 arena ≈ **+35.8 h**，
+gen 3 ≈ **+46 h**，十代跑满 ≈ **+109 h（约 4.6 天）**。
+
+两个必须说出口的条件：
+
+- **gen 4 起的锁定配置来自 `st["train_variant"]`**，gen 0 把它设成
+  `{lr 2e-5, steps 1200}`——那是**旧恒定 lr 网格**的胜者。gen 1/2 会用新网格（1cycle）
+  重选并覆盖它；但只要 gen 1/2 也没跑枚举，后 7 代就会是"1cycle 计划 + 恒定 lr 时代
+  选出来的 lr"这个混合体，不要当成干净实验读。
+- **AGENTS.md 的暂停纪律优先于预算**：连续 3 代未换代就人工停下复盘，此时实际耗时约
+  46 h 而不是 109 h。冠军仍冻结在 `runs/loop_p4/gen_0000/train/final.pt`
+  （生产预设只能人工切，loop 不许碰）。
+

@@ -177,8 +177,9 @@ cd ~/UniChess && /home/jeefy/miniconda3/envs/unichess/bin/python -m Kit train \
 ```
 
 中断后用同一命令接着跑（`out` 目录里的 `latest.pt` 记着配置哈希，不符会拒绝续训）。
-自对弈换代循环是 `python -m Kit loop Transformer/configs/loop_p4.json`
-（P4 口径的唯一配方，说明与换代纪律见 `AGENTS.md` 的「换代循环」一节）。
+自对弈换代循环是 `python -m Kit loop Transformer/configs/loop_p4_v2.json`
+（当前在跑的激进版；`loop_p4.json` 是初版，说明与换代纪律见 `AGENTS.md` 的「换代循环」一节，
+逐代实录见 `docs/experiments.md` §15/§17）。
 
 ### Server Service
 
