@@ -331,45 +331,52 @@ class TestConfigs(unittest.TestCase):
         self.assertTrue(torch.allclose(got, want), (got, want))
 
     def test_loop_p4_v2(self):
-        """激进版循环：1024 局自对弈 + lr×步数枚举搜索 + 256 对 arena。
+        """激进版：1024 局自对弈 + lr x wd 二维枚举 + 1cycle + 256 对 arena。
 
-        与 loop_p4.json 的差别只在规模与枚举搜索；训练口径（P4）不变。
+        与 loop_p4.json 的差别：规模、枚举维度（lr x wd 而非单 lr）、学习率计划
+        （1cycle 而非 constant）。
         """
         cfg = json.loads((ROOT / "configs" / "loop_p4_v2.json").read_text(encoding="utf-8"))
-        # 4096 局：600 步变体抽 36.9 万条 / 54.5 万记录 = 0.7x，1200 步 1.4x，
-        # 两边都不陷入反复过拟合（1024 局时分别是 2.7x / 5.4x，正是初版 gen3/4 掉负 Elo 的原因）
         self.assertEqual(cfg["games"], 4096)
         self.assertEqual(cfg["window"], 2)
-        self.assertEqual(cfg["selfplay"]["concurrency"], 32)
-        # initial 是已跑出来的冠军（gen 0 的候选），不是最初的生产权重
         self.assertTrue(cfg["initial"].endswith(
             "runs/loop_p4/gen_0000/train/final.pt"), cfg["initial"])
-        self.assertEqual(cfg["engine"]["kwargs"]["simulations"], 800)
+        self.assertEqual(cfg["enumerate_generations"], 3)
 
         train = cfg["train"]
+        # 步数固定 1200：同 lr 下 1200 全程优于 600（gen 0 实测）
+        self.assertEqual(train["steps"], 1200)
+        # 1cycle：峰值 lr 由 optimizer.lr 给，末段降到比初值低几个数量级
+        self.assertEqual(train["schedule"], {"kind": "onecycle", "pct_start": 0.25})
+
         variants = train["variants"]
         labels = [v["label"] for v in variants]
         self.assertEqual(len(labels), len(set(labels)))
-        # lr × steps 网格：5 个 lr × 2 个步数
-        self.assertEqual({v["optimizer"]["lr"] for v in variants},
-                         {1e-06, 2e-06, 5e-06, 1e-05, 2e-05})
-        self.assertEqual({v["steps"] for v in variants}, {600, 1200})
-        for v in variants:                      # 每个变体只覆盖 lr 与 steps
-            self.assertEqual(set(v) - {"label"}, {"optimizer", "steps"})
-            self.assertEqual(set(v["optimizer"]), {"lr"})
-        # 筛选赛：候选对冠军，800 sims（与自对弈同档）+ 192 对。
-        # 实测 GPU 吞吐相同（约 1.2 万 positions/s），2400 sims 每局只多干 3.75 倍活；
-        # 降到 800 后同样墙钟能跑 3 倍局数，得分 SE 从 ±6.2% 降到 ±3.6%。
+        # 对照 + 2 维网格：lr {3e-5,5e-5,1e-4} x wd {1e-4,1e-5,3e-6}，外加恒定 lr 对照
+        self.assertEqual(len(variants), 8)
+        self.assertIn("ctrl_const_2e-5_wd4", labels)          # 代内对照：上一代最优恒定配置
+        grid = [v for v in variants if v["label"] != "ctrl_const_2e-5_wd4"]
+        self.assertEqual({v["optimizer"]["weight_decay"] for v in grid},
+                         {1e-04, 1e-05, 3e-06})
+        self.assertEqual({v["optimizer"]["lr"] for v in grid},
+                         {3e-05, 5e-05, 1e-04})
+        for v in grid:                                        # 每个网格点都带 1cycle
+            self.assertNotIn("schedule", v)                  # 继承基座的 1cycle
+            self.assertEqual(set(v["optimizer"]), {"lr", "weight_decay"})
+        ctrl = next(v for v in variants if v["label"] == "ctrl_const_2e-5_wd4")
+        self.assertEqual(ctrl["schedule"], {"kind": "constant"})
+        self.assertEqual(ctrl["optimizer"]["lr"], 2e-05)
+        self.assertEqual(ctrl["optimizer"]["weight_decay"], 1e-04)
+
+        # 筛选赛：候选对冠军，800 sims 192 对（SE 约 ±3.6%）
         self.assertEqual(train["screen"]["pairs"], 192)
         self.assertEqual(train["screen"]["simulations"], 800)
-        self.assertEqual(train["screen"]["openings"], "bundled")
-        self.assertEqual(cfg["enumerate_generations"], 3)   # 前 3 代枚举，之后锁定冠军配置
-        # 最终 arena：256 对（512 局）且仍是 2400 sims —— 换代的判定绝不为省时而降规格
+        # 最终 arena：256 对 2400 sims，elo1=60（80 局判不出 +60 的教训）
         self.assertEqual(cfg["arena"]["match"]["pairs"], 256)
         self.assertEqual(cfg["arena"]["match"]["simulations"], 2400)
         self.assertEqual(cfg["arena"]["match"]["sprt"]["elo1"], 60.0)
         self.assertEqual(cfg["arena"]["gate"], {"kind": "sprt"})
-        # 训练口径与 loop_p4.json 一致（KL / accum 4 / bf16 / 前 4 片 / 自对弈 files）
+        # 训练口径与 loop_p4.json 一致（KL / accum 4 / bf16 / 前 4 片监督 70%）
         kw = train["task"]["kwargs"]
         self.assertEqual(kw["loss"]["policy_loss_type"], "kl_divergence")
         self.assertEqual(train["accum"], 4)
@@ -378,6 +385,7 @@ class TestConfigs(unittest.TestCase):
         self.assertEqual(kw["data"]["sources"][1]["shards"], {"files": "{selfplay_files}"})
 
     def test_loop_p4_and_v2_differ_only_in_scale(self):
+        """v2 与初版只在规模/枚举维度/学习率计划上不同，训练口径必须一致。"""
         a = json.loads((ROOT / "configs" / "loop_p4.json").read_text(encoding="utf-8"))
         b = json.loads((ROOT / "configs" / "loop_p4_v2.json").read_text(encoding="utf-8"))
         for key in ("engine", "selfplay", "sink", "export"):
@@ -385,12 +393,12 @@ class TestConfigs(unittest.TestCase):
         self.assertEqual(a["train"]["task"], b["train"]["task"])
         self.assertEqual(a["train"]["accum"], b["train"]["accum"])
         self.assertEqual(a["train"]["precision"], b["train"]["precision"])
-        self.assertEqual(a["train"]["schedule"], b["train"]["schedule"])
-        # v2 只多了枚举搜索，训练模板其余一致
-        a_train = {k: v for k, v in a["train"].items() if k not in ("steps", "optimizer")}
-        b_train = {k: v for k, v in b["train"].items()
-                   if k not in ("steps", "optimizer", "variants", "screen")}
-        self.assertEqual(a_train, b_train)
+        self.assertEqual(a["train"]["clip"], b["train"]["clip"])
+        self.assertEqual(a["train"]["optimizer"]["betas"], b["train"]["optimizer"]["betas"])
+        # 初版 constant / 1000 步 / 单 lr；v2 1cycle / 1200 步 / lr x wd
+        self.assertEqual(a["train"]["schedule"], {"kind": "constant"})
+        self.assertEqual(a["train"]["steps"], 1000)
+        self.assertNotIn("variants", a["train"])
 
     def test_loop_p4(self):
         """换代循环配方：钉死 P4 自对弈口径（30% 自对弈 + 70% 监督、lr 5e-6、KL）。

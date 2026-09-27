@@ -570,3 +570,87 @@ A series of diagnostic experiments (`tools/p4_diagnostic_experiments.py`) identi
 
 注意（胜者诅咒）：筛选用 64 对选最优，选出来那个的 score_a 系统性偏高，
 所以是否换代仍由 256 对的完整 arena 判定，不认筛选赛的分数。
+
+---
+
+## 16. 学习率计划与搜索维度：1cycle + lr×wd 二维（2026-09-27）
+
+§15 的 10 个变体跑的是**恒定 lr、wd 钉死 1e-4、步数 {600,1200}** 的一维网格。
+第 0 代实际跑出（每变体 384 局 @800 sims，SE 约 ±3.6%）：
+
+| 变体 | score_a | Elo | 结论 |
+|---|---|---|---|
+| lr1e-6_s600 | 0.466 | −23.6 | |
+| lr2e-6_s600 | 0.493 | −4.5 | |
+| lr5e-6_s600 | 0.520 | +13.6 | |
+| lr1e-5_s600 | 0.486 | −10.0 | 非单调 |
+| **lr2e-5_s600** | **0.557** | **+40.0** | 当时最优 |
+| lr1e-6_s1200 | 0.487 | −9.0 | 同 lr 下 1200 > 600 |
+| lr2e-6_s1200 | 0.531 | +21.7 | 同 lr 下 1200 > 600 |
+
+两条可复用的观察：
+
+1. **最优在网格边缘**（2e-5 是扫过的最大 lr），说明还没到顶，网格该往外扩。
+2. **步数 1200 全程优于 600**（同 lr 对比：−23.6→−9.0、−4.5→+21.7）。这和 §15
+   "1024 局时每条自对弈记录被抽 2.7~5.4 次"的诊断一致：自对弈数据涨到 4096 局后，
+   过拟合压力解除，步数可以放心加大。
+
+### 16.1 改用 1cycle（依据：SGDR / Super-Convergence）
+
+论文原文核对过的三条：
+
+- **Loshchilov & Hutter, SGDR（arXiv:1608.03983）的 incumbent 规则**：第一轮取最后一点；
+  重启之后"a solution obtained at the end of the last performed run at η_t = η_min"，
+  且作者强调这个策略**不需要单独验证集**来决定推荐点。→ 推荐点必须在"退火到最小 lr
+  之后的沉降点"，这正是恒定 lr 给不了的（终点落在噪声球里，§15 里 gen 1-7 判不出
+  有一部分是这个原因）。
+- **Loshchilov & Hutter**：整跑一次余弦（T_0=200, T_mult=1）在 CIFAR-10 上就是他们
+  试过的设置里最好的之一——不必上多周期。
+- **Smith & Topin（arXiv:1708.07120）明确指出多周期没用**："Our experiments show that
+  it is not possible to observe the super-convergence phenomenon when using their pattern"
+  （their pattern = SGDR 的锯齿重启）。→ 所以**不上多周期**，只做单周期（1cycle）。
+
+实现上 kit 已有 `schedule.kind = "onecycle"`（torch `OneCycleLR`），且 `Trainer`
+会存取 `scheduler.state_dict()`（`train/trainer.py:145,203`），中断续跑不会把计划错位，
+所以这是纯配置改动。取 `pct_start=0.25`（峰值提前一点，多留沉降时间）。
+
+### 16.2 搜索维度换成 lr × wd
+
+**Smith & Topin 的核心结论：大 lr 起正则化作用，必须同步削弱其他正则。**
+原文在 ImageNet 上为了用 0.05→1.0 的 lr，把 weight decay 从 1e-4 降到 3e-6~1e-5，
+并总结 "the amount of regularization must be balanced for each dataset and architecture"。
+
+我们此前的网格**只扫 lr、wd 一直钉在 1e-4**，按这条结论，扫出来的"最优 lr"很可能是
+被过强的 wd 压住的假顶点——尤其当最优出现在网格边缘时。
+
+新网格（步数固定 1200，8 个变体）：
+
+| 变体 | lr | wd | 作用 |
+|---|---|---|---|
+| `ctrl_const_2e-5_wd4` | 2e-5 | 1e-4 | **代内对照**：恒定 lr + 上一代最优配置 |
+| `1c_3e-5_wd4` / `1c_5e-5_wd4` / `1c_1e-4_wd4` | 3e-5 / 5e-5 / 1e-4 | 1e-4 | wd 固定，扫峰值 lr |
+| `1c_5e-5_wd5` / `1c_5e-5_wd6` | 5e-5 | 1e-5 / 3e-6 | 峰值固定，扫 wd |
+| `1c_1e-4_wd5` / `1c_1e-4_wd6` | 1e-4 | 1e-5 / 3e-6 | 高 lr + 低 wd 的角落 |
+
+保留恒定 lr 对照是为了把"1cycle 的功劳"和"这一代数据/冠军变了"分开——否则换了
+计划又换了代，赢了也不知道是谁的功劳。
+
+### 16.3 一条被证据推翻的设想
+
+曾考虑过"多周期衰减（SGDR）"，论文实测否掉了它（见上），而且 SGDR 自己说重启
+"often temporarily worsen performance"。我们每代只导出一个候选、还要过 256 对
+门槛，没有余裕去赌周期中点。要上也必须满足：**末轮加长并收到 0，且 incumbent 只取
+η_min 点**。
+
+### 16.4 迁移风险（必须记住）
+
+两篇论文用的都是 **SGD + momentum**，而且 Smith & Topin 明说"Adam 这类自适应方法
+在有效时不使用足够大的学习率，也不会出现 super-convergence"。我们是 AdamW，
+lr 2e-5 在 Adam 尺度里**偏小**（transformer 常见 1e-4~3e-4），和论文里 SGD 的
+0.05~3.0 完全不是同一量纲。所以"大 lr 正则化"这个核心结论**未必能迁到我们身上**，
+凡是由它推出的推论（包括下调 wd）都要打折。**唯一可信的判据仍然是 arena 的 512 局。**
+
+（另：曾以为 MuZero 用"KL 散度超阈值就降 lr"的自适应控制器，逐字核过 arXiv 全文
+1911.08265 后**未证实**——全文 0 次出现 KL/Kullback/divergence，lr/optimizer/momentum/
+weight decay 都没写，附录 C 原话是"参数值请参考 pseudocode"，而 pseudocode 在
+ancillary files 里。该条不作为设计依据。）
