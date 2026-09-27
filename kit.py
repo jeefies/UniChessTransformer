@@ -36,6 +36,10 @@ from .model import (ChessTransformer, STRATIFIED_CFG, StratifiedChessTransformer
 ROOT = Path(__file__).resolve().parent
 DEFAULT_CKPT = ROOT / "runs" / "transformer_20m" / "best_model.pt"
 
+#: kit 的引擎插件协议版本（Kit/__init__.py::SPI_VERSION）。不声明就默认取 kit 的版本号，
+#: 那时 kit 升级不会再报错——所以这里显式写上，让不匹配在第一现场炸出来。
+KIT_SPI_VERSION = 2
+
 # config.json（Server 预设）里与搜索相关的键 → make_player_factory 参数。
 # description 只是说明文字，不进参数表；新增无法映射的键要显式忽略而不是静默丢弃。
 _PRESET_IGNORED = {"description"}
