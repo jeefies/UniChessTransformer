@@ -77,7 +77,7 @@
     "clip": 1.0,
     "nonfinite": "raise",
     "optimizer": {
-      "lr": 5e-06,
+      "lr": 0.0001,
       "weight_decay": 0.0001,
       "betas": [
         0.9,
@@ -99,7 +99,7 @@
     },
     "variants": [
       {
-        "label": "ctrl_const_2e-5_wd4",
+        "label": "ctrl_const_2e-5_wd1e-4",
         "optimizer": {
           "lr": 2e-05,
           "weight_decay": 0.0001
@@ -109,52 +109,31 @@
         }
       },
       {
-        "label": "1c_3e-5_wd4",
-        "optimizer": {
-          "lr": 3e-05,
-          "weight_decay": 0.0001
-        }
-      },
-      {
-        "label": "1c_5e-5_wd4",
-        "optimizer": {
-          "lr": 5e-05,
-          "weight_decay": 0.0001
-        }
-      },
-      {
-        "label": "1c_1e-4_wd4",
+        "label": "1c_1e-4_wd1e-4",
         "optimizer": {
           "lr": 0.0001,
           "weight_decay": 0.0001
         }
       },
       {
-        "label": "1c_5e-5_wd5",
+        "label": "1c_2e-4_wd1e-4",
         "optimizer": {
-          "lr": 5e-05,
-          "weight_decay": 1e-05
+          "lr": 0.0002,
+          "weight_decay": 0.0001
         }
       },
       {
-        "label": "1c_5e-5_wd6",
+        "label": "1c_5e-4_wd1e-4",
         "optimizer": {
-          "lr": 5e-05,
-          "weight_decay": 3e-06
+          "lr": 0.0005,
+          "weight_decay": 0.0001
         }
       },
       {
-        "label": "1c_1e-4_wd5",
+        "label": "1c_1e-4_wd1e-2",
         "optimizer": {
           "lr": 0.0001,
-          "weight_decay": 1e-05
-        }
-      },
-      {
-        "label": "1c_1e-4_wd6",
-        "optimizer": {
-          "lr": 0.0001,
-          "weight_decay": 3e-06
+          "weight_decay": 0.01
         }
       }
     ],
