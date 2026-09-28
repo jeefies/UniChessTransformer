@@ -24,9 +24,13 @@ python -m Kit loop Transformer/configs/loop_p4_v2.json   # 在跑的（激进版
 `runs/stratified_p4_selfplay_corrected/best_model.pt`）**只能由人工切换**：
 改 `config.json` 一次提交 + 重启 `unichess-server`，loop 不许碰它。
 
-截至 **2026-09-28 12:00 UTC**：gen 2 自对弈 54%，新冠军 =
-`runs/loop_p4_v2/gen_0001/train_1c_1e-4_wd4/final.pt`，loop PID 155800。
+截至 **2026-09-28 13:25 UTC**：gen 2 自对弈 2792/4096（约 68%，8.0 s/局，还剩 3.0 h），
+新冠军 = `runs/loop_p4_v2/gen_0001/train_1c_1e-4_wd4/final.pt`，loop PID 166263。
+gen 2 起跑 **5 变体新网格**（见 §5.2，2026-09-28 人工决定），gen 2 是最后一个枚举代。
 （这一行会过期，以 `loop_state.json` 为准。）
+
+> `loop.log` 里有 4 条指向 `gen_0000/arena.log` 的 Traceback，是 **2026-09-27 的旧代码**
+> 留下的（栈里行号 346/390，现在是 443/462），不是新故障，别被它误导。
 
 ## 2. 两个配方的规模差异
 
