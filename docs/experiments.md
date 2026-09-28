@@ -738,7 +738,7 @@ ancillary files 里。该条不作为设计依据。）
 
 ### 17.3 修法与验证
 
-Kit `6f91bd6`（2026-09-27）：**判决在越界那一刻冻结**，不再拿最终记录集重算。
+Kit `4925c62`（2026-09-27）：**判决在越界那一刻冻结**，不再拿最终记录集重算。
 
 - `_sprt_decided()` 改为返回 `(该停, 当时判决)`；
 - `_Run` 记下 `stopped_verdict`，`add()` 在越界时捕获；续跑（读回已完成记录）同样冻结；
@@ -805,7 +805,7 @@ bundled 下的实际形态：384 局只摊到 **32 条线路、每条正好 12 �
    后续所有重试——gen 0 就留下过 `arena.jsonl.bad_checkpoint_20260927`
    （header 里是 `train/final.pt`，哈希 `0c6ae0b4…` 对新配置的 `e3a578b5…`）。
    删掉/改名残留文件即可恢复，但**排查成本全在"为什么它不自己重跑"上**。
-3. **Kit 续跑时的候选路径 bug**（`5dac905`）：`mapping()` 一律把 `{candidate}` 指到
+3. **Kit 续跑时的候选路径 bug**（`98b2798`）：`mapping()` 一律把 `{candidate}` 指到
    `<gen>/train/<export>`，而枚举代的冠军在 `train_<label>/`；只有前进的 search 分支会
    纠正它。于是 `phase == "arena"` 续跑 → `FileNotFoundError: .../gen_0000/train/final.pt`。
 4. **改 Kit 不用重启 loop（子进程热更新），改 loop 配置必须重启**——两者成本差一个自对弈

@@ -62,7 +62,7 @@ python -m Kit loop Transformer/configs/loop_p4.json      # 初版（200 局 / 40
 - **v2 的 gen 0 已跑完（2026-09-27），结论见 `docs/experiments.md` §17**：arena 101 局
   score_a 0.559 / Elo +41.5 / CI95 [−19.3, +104.9]，`stopped_by_sprt: true` 但记成
   `promoted: false`——**假阴性**，越界时 llr=+3.164 已判 H1，是在途对局把收尾 llr 拖回
-  +1.471 所致（Kit `6f91bd6` 已修，gen 1 起不再复现）。**gen 0 是混合体**：十场筛选赛
+  +1.471 所致（Kit `4925c62` 已修，gen 1 起不再复现）。**gen 0 是混合体**：十场筛选赛
   跑在旧网格（10 个恒定 lr 变体）+ bundled 开局库上，只有最终 arena 用新配方；gen 1 起
   才是完整的 8 变体 1cycle + 合成开局库。gen 1 自对弈从 09-27 21:35 起步。
   **gen 4 起的锁定配置**来自 `st["train_variant"]`，gen 0 设的是 `{lr 2e-5, steps 1200}`
@@ -80,7 +80,7 @@ python -m Kit loop Transformer/configs/loop_p4.json      # 初版（200 局 / 40
     30.2/30.8。concurrency 8/12/16 无差别。
     **`workers>1` 曾踩过一个假阴性坑**：停止信号发出后还有几局在途对局落盘，最终 llr 可能
     从越界值退回界内，把 `verdict` 重算成 `None`（gen 0 就因此丢了一次本该成功的换代，
-    越界时 llr=+3.164、收尾 +1.471）。**Kit `6f91bd6` 已修**：判决改为在越界那一刻冻结
+    越界时 llr=+3.164、收尾 +1.471）。**Kit `4925c62` 已修**：判决改为在越界那一刻冻结
     （`_Run.stopped_verdict`），续跑同样冻结，`summary` 不再覆盖它。改 match 相关逻辑前
     先看 `Kit/tests/test_match.py::test_sprt_verdict_is_frozen_at_boundary`。
     **改 Kit 不必重启 loop**（`selfplay/train/arena/screen` 都是子进程，`loop.py:_run`），
