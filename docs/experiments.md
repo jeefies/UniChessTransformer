@@ -1035,7 +1035,10 @@ gen 3 无筛选赛，按 §18.5 那份锁定的 `lr 5e-4 + 1cycle + wd 1e-4` 直
 2. **gen 4 已用新冠军开始自对弈**（15:43，`first_game=16384`，
    权重 `gen_0003/train/final.pt`），预计 10-01 01:55 本地出判决；
    剩余 6 代（gen 4–9）按 10.2 h/代算，loop 预计 **10-03 05:10 本地**收尾。
-3. **生产权重落后两代**：v2 已有 gen 1（+73.8）、gen 3（+65.1）两个经 arena 验证的
-   新冠军，线上仍是 `runs/stratified_p4_selfplay_corrected/best_model.pt`。
-   切换只能人工做（改 `Transformer/config.json` + 重启 `unichess-server`）。
+3. **生产权重已切换**（2026-09-29）：`Transformer/config.json` 的两个预设
+   `max_mcts` / `max_t` 已指向 `gen_0003/train/final.pt`，远端 `unichess-server`
+   已重启（PID 308690），`/api/health` + 两个 preset 的开局对局均正常，
+   journal 无 error/traceback。血统链：`stratified_p4_selfplay_corrected` →
+   loop_p4 gen0（+163 Elo，直接打赢被替换的生产权重）→ v2 gen1（+73.8）→ v2 gen3。
+   回滚 = 改回旧 ckpt 路径后重启 `unichess-server`。
 

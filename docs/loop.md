@@ -20,9 +20,12 @@ python -m Kit loop Transformer/configs/loop_p4_v2.json   # 在跑的（激进版
 | loop PID | `/tmp/unichess_t_loop_v2.pid` |
 
 **换代的唯一依据**是 arena 的 SPRT 结论：判决 H1 才更新 `loop_state.json` 的 champion。
-生产权重（`config.json` 的 `max_mcts` / `max_t` 预设，指向
-`runs/stratified_p4_selfplay_corrected/best_model.pt`）**只能由人工切换**：
+生产预设（`config.json` 的 `max_mcts` / `max_t`，当前指向
+`runs/loop_p4_v2/gen_0003/train/final.pt`）只能由人工切换：
 改 `config.json` 一次提交 + 重启 `unichess-server`，loop 不许碰它。
+gen 1（+73.8）与 gen 3（+65.1）两个 arena 验证的新冠军都以该文件为链路终点，
+血统：`stratified_p4_selfplay_corrected/best_model.pt` → loop_p4 gen0 +163
+→ v2 gen1 +73.8 → v2 gen3 +65.1。回滚 = 改回旧 ckpt 路径后重启。
 
 截至 **2026-09-29 16:35 本地**：gen 3 已判 **H1 换代成功**（锁定代，+65.1 Elo，
 新冠军 = `gen_0003/train/final.pt`），连续未换代计数清零；gen 4 自对弈 15:43 起跑
