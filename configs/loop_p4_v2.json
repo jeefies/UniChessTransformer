@@ -1,5 +1,6 @@
 {
   "out": "/home/jeefy/UniChess/Transformer/runs/loop_p4_v2",
+  "seed_base": 20260930,
   "generations": 10,
   "initial": "/home/jeefy/UniChess/Transformer/runs/loop_p4/gen_0000/train/final.pt",
   "games": 4096,
@@ -12,7 +13,10 @@
       "simulations": 800,
       "batch_size": 64,
       "precision": "fp16",
-      "syzygy_path": "/home/jeefy/UniChess/data/raw/syzygy345"
+      "syzygy_path": "/home/jeefy/UniChess/data/raw/syzygy345",
+      "dirichlet_alpha": 0.3,
+      "dirichlet_eps": 0.1,
+      "root_min_visits": 4
     }
   },
   "selfplay": {
@@ -38,7 +42,7 @@
           "batch_size": 512,
             "sources": [
               {
-                "weight": 0.5,
+                "weight": 0.3,
                 "shards": {
                   "dir": "/home/jeefy/UniChess/ResNet/data/shards_evals",
                   "pattern": "evals_*.bin",
@@ -51,7 +55,7 @@
                 "q_ratio": 0.0
               },
               {
-                "weight": 0.5,
+                "weight": 0.7,
                 "shards": {
                   "files": "{selfplay_files}"
                 },
@@ -151,7 +155,7 @@
   "export": "best_model.pt",
   "arena": {
     "match": {
-      "pairs": 256,
+      "pairs": 512,
       "seed": 20260926,
       "max_plies": 400,
       "concurrency": 8,
