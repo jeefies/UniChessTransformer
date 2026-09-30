@@ -1217,3 +1217,45 @@ gen 5 与 gen 4 用**完全相同**的锁定配置（`lr 5e-4` + onecycle `pct_s
 gen 4、gen 5 都是带着 1200 步跑完的。gen 6 的自对弈窗口（当前）是安全重启时机，
 硬截止点是 gen 6 的 train 阶段开始（约 09-30 20:30 本地）。
 
+### 18.11 配置已改并重启：steps 400 + 自对弈 0.5（2026-09-30 13:41）
+
+上面"未落地"的状态已结束。改了 `configs/loop_p4_v2.json`（提交 `511403e`）：
+
+| 字段 | 原值 | 新值 | 理由 |
+|---|---|---|---|
+| `train.steps` | 1200 | **400** | gen4 的 loss 在 step 300 见底后单调回升，900 步净倒扣 |
+| `data.sources[0].weight`（ResNet 静态） | 0.7 | **0.5** | 与自对弈配平 |
+| `data.sources[1].weight`（自对弈） | 0.3 | **0.5** | 每批取整 `[256,256]` 恰好一半 |
+
+**未动并被实测确认**：`optimizer.lr` 仍是锁定值 **5e-4**。
+`_merge` 是递归合并，`loop_state.json` 的 `train_variant`（只含
+`optimizer.lr/weight_decay`）不会碰到 `steps` 与 `sources`。
+在远端用 `_apply_overrides` 的同一套合并逻辑验证过 gen 6 的有效训练配置：
+
+```
+optimizer.lr = 0.0005 (锁定值)   steps = 400
+schedule     = {'kind':'onecycle','pct_start':0.25}
+weights      = [0.5, 0.5]       每批 [256, 256]
+```
+
+**重启过程**（`phase=selfplay` 窗口内，安全）：
+
+1. 先 SIGTERM 自对弈子进程 → loop 因子进程 `rc=-15` 抛 `RuntimeError` **自行退出**
+   （`loop.log` 因此多一条 Traceback，**计划内，非新故障**）；
+   不必 SIGKILL——`loop.py:466` 的 `FileLock` 是 OS 级 flock，进程退出即释放，
+   实测 2 秒内 `loop.lock` 恢复空闲。
+2. **已写的 998 局完整保留**，三重保障：
+   - `SelfPlayShardSink._repair()` 按元数据记录条数截断半截尾，只允许截小；
+   - `plan_selfplay` 按全局局号 `first_game=24576` 编号，开局与 RNG 流只取决于局号；
+   - `run_selfplay` 用 `skip_games=done_games()` 在建池**前**过滤（`selfplay.py:156`），
+     998 局不会被重跑。
+3. 新 loop PID **811011**（ppid=1，已 setsid 脱离），子进程 811032，
+   `/tmp/unichess_t_loop_v2.pid` 已写回。
+
+**又一个测量坑（§loop.md §4.2 第三次应验）**：重启后头 90 秒只写 2 局
+（≈45 s/局），差点被误判成续跑 bug。拉长到 5 分钟：**稳态 7.50 s/局**，
+与重启前（7.5 s/局）一致。**结论：重启自对弈后至少测 5 分钟再下判断。**
+
+**gen 6 预期**：剩 3023 局 × 7.50 s = 6.3 h → 自对弈约 **20:12 本地**完成；
+训练 400 步约 3.5 min；arena 判决 **20:30–21:00**。
+
