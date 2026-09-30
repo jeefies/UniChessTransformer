@@ -1283,3 +1283,96 @@ weights      = [0.5, 0.5]       每批 [256, 256]
 `best_model.pt` 与 `final.pt` 逐位相同，改动不起作用；若中途仍有回升，
 则恰好兜住。等价于给"训过头"上了一道与步数无关的保险。
 
+### 18.13 修 bug：select_best_by 判据错 + 当晚一次真实崩溃（2026-09-30 夜）
+
+上一节说"零风险"是错的——当晚 **21:00 左右 loop 崩了**，gen 6 的 arena 从未运行。
+
+```
+RuntimeError: 训练结束但没有导出 .../gen_0006/train/best_model.pt
+  File "Kit/pipelines/loop.py", line 338, in phase_train
+```
+
+**根因**：`bf17fd5` 把判据写成 `validate is None`（**方法**不存在）。
+但 T/R 的 `Planes19Task` **自带** `validate` 方法，只是没配验证数据源时
+它返回空 dict、`score` 为 None——**行为与没有方法完全一致**。于是：
+
+- `by_train_loss` 分支永不触发 → `best_model.pt` 从未导出；
+- `do_val` 在 `step == cfg.steps` 时为真，打出一条
+  `{"step": 400, "validation": {}, "best": Infinity, "improved": false}`。
+
+证据就在 `gen_0006/train/train.jsonl` 末行：**validation 记录在**，
+说明 validate 真的被调用了，只是拿不到 score。这一条记录本身就是判据写错的铁证。
+
+**连带发现的第二个问题**：`Trainer._run` 里 `step >= cfg.steps` 的
+提前返回路径**什么都不导出**。所以即使 loop 重入 `phase_train`，
+Trainer 从 `latest.pt` 看到 step=400>=400 直接 return，final/best 都拿不到，
+照样崩。这是同一晚的第二次崩溃来源，latent bug，被这次改动暴露出来。
+
+**修复**（Kit `cf831fa`，判据改成"**拿不到 score**"而不是"方法不存在"）：
+
+```python
+by_train_loss = (export.get("best") and export.get("select_best_by", "none") == "train")
+if do_val:
+    ...
+    score = res.get("score")
+    improved = score is not None and score < best
+    if improved:
+        ...export by validation...
+    elif (score is None and by_train_loss and logged_loss is not None
+            and logged_loss < best):
+        ...export by train loss...
+elif (by_train_loss and logged_loss is not None and logged_loss < best):
+    ...export by train loss...
+```
+
+早退路径也改成按 `export` 落盘；best 的真实权重在 `latest.pt` 里已不可重建，
+**磁盘上已有就原样留着不覆盖**，只有缺失时才拿当前步顶上。
+
+**回归测试**（`Kit/tests/test_train.py`，共 19 项全过，全量 349 项 OK）：
+
+- `test_select_best_by_train_with_scoreless_validate`：钉住上面那个根因
+- `test_completed_run_reentered_still_exports`：早退路径必须导出
+- `test_completed_run_reentered_keeps_existing_best`：不许用 final 覆盖已有 best
+- `_read_log` 区分「全部记录 / loss 记录」：`train.jsonl` 混三种记录，
+  之前算 `improved` 会 `KeyError: 'loss'`
+
+**试过但回退**：给 `phase_train` 加「候选已存在就跳过重训」的守卫。
+它打破 `test_locked_generation_writes_replaced_schedule_to_disk`
+（该测试特意预创建 `train/final.pt` 并断言 `_run` 仍被调用），
+而且恢复 gen 6 并不需要它——`latest.pt` 在，重进走早退路径几秒就导出完。
+
+**gen 6 的判决没有被崩溃污染**（这是关键）：
+
+- 训练产物完整：400 步、241.6 s、`final.pt` + `latest.pt` 都在；
+- 恢复时 `best_model.pt` 从 `latest.pt` 的早退路径导出，
+  **实测 816 个张量与 `final.pt` 的 sha256 完全相同**（文件差 2134 字节是
+  pickle 序列化噪音，内容一致）；
+- 而 gen 6 的 loss 最低点**正是 step 400**（见下），所以 best=final 语义等价。
+
+**恢复操作**：22:04 重启 loop（`phase=train` 续跑），Trainer 早退导出
+`best_model.pt` → 候选检查通过 → `phase=arena` → arena 开跑。
+
+**顺带证明 400 步的改动是对的**——gen 6 的完整曲线：
+
+| step | lr | loss |
+|---|---|---|
+| 1 | 2.01e-05 | 1.359535 |
+| 50 | 2.64e-04 | 1.337315 |
+| 100 | **5.00e-04（峰值）** | 1.339854 |
+| 150 | 4.65e-04 | 1.319879 |
+| 200 | 3.73e-04 | 1.308815 |
+| 250 | 2.47e-04 | 1.296634 |
+| 300 | 1.23e-04 | 1.278206 |
+| 350 | 3.22e-05 | 1.275592 |
+| **400** | 1.57e-08 | **1.274855（最低点）** |
+
+对照 gen 4 的 1200 步：step 300 见底 1.4014 后回升 0.0255。
+**同样的 lr 峰值点，400 步下 loss 一路降到终点、终点就是最低点**——
+"步数过长"这个诊断被 gen 6 直接证实。唯一的抖动是 step 100 的
+1.3373→1.3398（+0.0025），量级是噪声。
+
+**教训（给以后的自己）**：耦合 Kit 与 loop 的改动时，"先升 Kit 再上 loop 配置"
+只保证了顺序，**没保证 Kit 的实现是对的**。这类跨仓改动落地后必须有一次
+端到端 smoke（哪怕只跑 2 步训练确认候选文件真的出来了），
+不能只看单测绿——本例单测全绿、全量 346 项 OK，线上照样崩。
+

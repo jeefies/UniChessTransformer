@@ -41,6 +41,15 @@ lr 仍为锁定值 5e-4。gen 6 起按新配置训练（自对弈窗口内重启
 第二次重启，新 loop PID **832414**，1326 局数据保留。gen 6 预期顺延到
 自对弈约 **20:15** 完成、判决 **20:30–21:00**。
 
+**21:00 loop 崩过一次、22:04 恢复**：崩溃根因是 Kit `bf17fd5` 的
+`select_best_by` 判据写成 `validate is None`，而 T 的 `Planes19Task` 自带
+validate 方法（没配数据源时拿不到 score），分支未触发 → best_model.pt 没导出
+→ `phase_train` fail-fast。Kit `cf831fa` 已修判据并补 3 个回归测试。
+gen 6 训练产物完整、恢复后 best_model.pt 与 final.pt 张量 sha256 相同
+（gen6 的 loss 最低点正是 step 400），**判决未被污染**。
+arena 22:04 重跑，判决预计 **22:10–22:30**。
+详见 `experiments.md` §18.13。
+
 gen 3–9 按锁定配置训练 = **lr 5e-4 + 1cycle(400 步) + wd 1e-4 + 自对弈配比 0.5**，
 注意**锁的是筛选赛胜者、不是 arena 判决**（§5.2）。
 （这一行会过期，以 `loop_state.json` 为准。）
@@ -198,6 +207,24 @@ Kit 必须在 loop 之前升级，否则 `loop.py:338` 会因找不到候选文�
 轨迹不再过长（步数 400）+ 导出的点是最优点而非终点（best_model.pt）。
 对 gen 6 而言，若 loss 单调下降（400 步下大概率如此），`best_model.pt` 与
 `final.pt` 逐位相同，这次改动是**零风险的保险**；若中途仍有回升，则恰好兜住。
+
+⚠ **上面那句"零风险"当晚就被推翻**——Kit `bf17fd5` 的 `select_best_by` 判据写错，
+loop 在 21:00 左右崩了、gen 6 的 arena 没跑成。完整经过、根因、修复（Kit `cf831fa`）、
+回归测试与 22:04 的恢复操作见 `experiments.md` §18.13。
+一句话版本：判据写成 `validate is None`（方法不存在），但 T/R 的 `Planes19Task`
+**自带** validate 方法、没配数据源时返回空 dict 拿不到 score，行为与没有方法一致，
+分支永不触发、best_model.pt 不导出 → loop 在 `phase_train` 的候选检查处 fail-fast。
+
+**教训**：跨仓耦合（Kit + loop）落地后必须端到端 smoke，
+不能只看单测绿——本例单测全绿、全量 346 项 OK，线上照样崩。
+
+**gen 6 的判决没被崩溃污染**（已验证）：训练产物完整；恢复时导出的
+`best_model.pt` 与 `final.pt` 的 816 个张量 **sha256 完全相同**；
+而 gen 6 的 loss 最低点正是 step 400（1.274855，见 §18.13 表），
+所以 best=final 语义等价，arena 测的就是 gen 6 训出的模型。
+
+**gen 6 更新的预期**：arena **22:04 本地**开跑，24 s/局，
+SPRT 早停 14–61 局（≈6–25 min）→ 判决约 **22:10–22:30**。
 
 gen 0 那次假阴性是 `Kit/pipelines/match.py` 的快照不一致 bug（`workers>1` 才暴露），
 已修为"越界即冻结判决"，gen 1 的 arena 就是这个修复的现场证明——同样出现
