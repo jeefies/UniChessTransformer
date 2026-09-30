@@ -1376,3 +1376,83 @@ elif (by_train_loss and logged_loss is not None and logged_loss < best):
 端到端 smoke（哪怕只跑 2 步训练确认候选文件真的出来了），
 不能只看单测绿——本例单测全绿、全量 346 项 OK，线上照样崩。
 
+### 18.14 gen 6 判决：H0，streak 到 3，触发暂停纪律（2026-09-30 22:50）
+
+**arena 判决**（`gen_0006/arena.jsonl.summary.json`，arena 22:04 起跑、836.4 s）：
+
+| 指标 | 值 |
+|---|---|
+| 成绩 | 37 局，14 胜 8 和 15 负，score_a **0.4865**，Elo **−9.39**，CI95 [−112.2, +91.7] |
+| SPRT | llr **−1.5785**（越下界发生在第 **20** 局）、`verdict=H0`、`stopped_by_sprt=true` |
+| 其它 | `duplicate_rate` 0.0、`mean_plies` 142.0、`elapsed_s` 836.4 |
+| 判 | **promoted=false**，新冠军仍为 `gen_0003/train/final.pt` |
+
+配置复核 **PASS**：`steps=400`、`lr=0.0005`（锁定值）、
+`schedule=onecycle/pct_start 0.25`、`weights=[0.5,0.5]`、
+`export.select_best_by=train`。崩溃恢复后配置完好生效。
+
+**连续未换代 = 3**（gen 4 −74.83、gen 5 −15.45、gen 6 −9.39）→
+**触发暂停纪律**（`AGENTS.md`：连续 3 代未换代就停下人工复盘，不放宽门槛）。
+**已于 22:52 停 loop**，配置与 `loop_state.json` 一字未改
+（仍是 `generation=7 / phase=selfplay`），gen 7 已写的 **240 局**完好，
+重启即从第 241 局续跑。`unichess-server` / `unichess-tunnel` 未受影响。
+
+#### 但趋势是明确变好的，这是复盘的核心材料
+
+| 代 | 配置 | Elo | score_a | 局数 | SPRT |
+|---|---|---|---|---|---|
+| gen 4 | 1200 步 / 70-30 | **−74.83** | 0.3939 | 33 | llr −2.672，14 局越界 |
+| gen 5 | 1200 步 / 70-30 | **−15.45** | 0.4778 | 45 | H0 |
+| gen 6 | **400 步 / 50-50 / best_model.pt** | **−9.39** | 0.4865 | 37 | llr −1.579，20 局越界 |
+
+Elo 从 −74.8 收窄到 −9.4，score_a 从 0.394 爬到 0.4865（离 0.5 只差 0.0135）。
+**但三条 SPRT 都是 H0，按纪律一票都不能算换代。**
+
+#### 一个必须点出的统计细节：gen 6 是"弱 H0"
+
+gen 6 的 `stopped_at_game=20`（第 20 局越下界 −2.251），
+但**收尾 llr 只有 −1.5785，已回到界内**——
+即越界之后又在途下了 17 局，把 llr 拉回了中间地带。
+这与 gen 2 那次"越上界 +2.890 判 H1、收尾 llr 被在途局拖回 +1.471"完全同型。
+
+按"越界即冻结"的口径，verdict 是 H0，这条必须认；
+但**证据强度比 gen 4 弱得多**：gen 4 的收尾 llr 是 −2.672（一直在下界下方），
+gen 6 只有 −1.5785。CI95 [−112.2, +91.7] 也稳稳含 0。
+换句话说：**候选不是"更差"，而是"看不出来更好"**。
+
+#### 已确认修好的两件事（不容否认）
+
+1. **400 步消除了过训练**：gen 6 曲线 1.359535 → 1.274855 单调下降、
+   **终点即最低点**（§18.13 表），对照 gen 4 的 step 300 见底后回升 0.0255。
+2. **`select_best_by` 与崩溃都已修复**（Kit `cf831fa`），
+   恢复后 `best_model.pt` 与 `final.pt` 张量 sha256 相同，判决未被污染。
+
+#### 停 loop 时保留的现状（复盘后据此决策）
+
+- `loop_state.json`：`generation=7 / phase=selfplay`，`champion=gen_0003`，
+  `train_variant={"optimizer":{"lr":0.0005,"weight_decay":0.0001}}`
+- `gen_0007/selfplay/`：240 局已写（`sp.bin` 4,686,400 B），`first_game=28672`
+- 配置 HEAD：Transformer `f10d645`、Kit `cf831fa`，工作副本均无本地改动
+- 恢复命令（改完配置后手动执行，**不要**在复盘前重启）：
+  ```bash
+  cd /home/jeefy/UniChess
+  setsid nohup /home/jeefy/miniconda3/envs/unichess/bin/python \
+    -m Kit loop Transformer/configs/loop_p4_v2.json \
+    >> ~/UniChess/Transformer/runs/loop_p4_v2/loop.log 2>&1 < /dev/null &
+  echo $! > /tmp/unichess_t_loop_v2.pid
+  ```
+
+#### 复盘时要回答的问题（材料都已备齐，此处只列不答）
+
+1. **Elo −9.4 / llr −1.579 是"真的没进步"还是"分辨力不够"？**
+   arena 早停只用 37 局就够了吗？`elo1=60` 的晋级线配合 37 局，
+   SE 约 ±110 Elo——也许该加 `pairs` 而不是继续改配方。
+2. **候选已经在终点最小了，还要怎么改？** §18.9/§18.13 已把"步数过长"
+   "导出最差点"两个根因都修掉了，gen 6 曲线也确实干净。
+   若瓶颈是数据/分辨力而非配方，继续调 lr/步数的边际收益可能已经是零。
+3. **50/50 配比是否过头？** 静态源每代覆盖率从 36% 掉到 17.7%，
+   自对弈从 71% 掉到 39.6%（都是每代样本数腰斩的必然结果）。
+   需要评估是不是该往回调，或反向加大 `games`。
+4. **要不要接受一个更低的晋级线**（`elo1` 从 60 降到 30）？
+   注意这违反"不放宽门槛"的纪律，必须显式决策，不能顺手改。
+
