@@ -36,29 +36,29 @@
         "data": {
           "kind": "mix",
           "batch_size": 512,
-          "sources": [
-            {
-              "weight": 0.7,
-              "shards": {
-                "dir": "/home/jeefy/UniChess/ResNet/data/shards_evals",
-                "pattern": "evals_*.bin",
-                "slice": [
-                  0,
-                  4
-                ]
+            "sources": [
+              {
+                "weight": 0.5,
+                "shards": {
+                  "dir": "/home/jeefy/UniChess/ResNet/data/shards_evals",
+                  "pattern": "evals_*.bin",
+                  "slice": [
+                    0,
+                    4
+                  ]
+                },
+                "repair_castling": false,
+                "q_ratio": 0.0
               },
-              "repair_castling": false,
-              "q_ratio": 0.0
-            },
-            {
-              "weight": 0.3,
-              "shards": {
-                "files": "{selfplay_files}"
-              },
-              "repair_castling": false,
-              "q_ratio": 0.0
-            }
-          ]
+              {
+                "weight": 0.5,
+                "shards": {
+                  "files": "{selfplay_files}"
+                },
+                "repair_castling": false,
+                "q_ratio": 0.0
+              }
+            ]
         },
         "loss": {
           "kind": "t_chess",
@@ -69,7 +69,7 @@
         }
       }
     },
-    "steps": 1200,
+    "steps": 400,
     "accum": 4,
     "seed": 42,
     "device": "cuda",
