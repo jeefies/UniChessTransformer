@@ -1259,3 +1259,27 @@ weights      = [0.5, 0.5]       每批 [256, 256]
 **gen 6 预期**：剩 3023 局 × 7.50 s = 6.3 h → 自对弈约 **20:12 本地**完成；
 训练 400 步约 3.5 min；arena 判决 **20:30–21:00**。
 
+### 18.12 第二批修复：候选改取 best_model.pt（Kit `select_best_by`）
+
+§18.11 只修了 gen 4 事故的两个根因之一，第二个（**导出的点是全程最差的点**）在 Kit 侧修：
+
+| 文件 | 改动 |
+|---|---|
+| `Kit/train/config.py` | `export` 新增 `select_best_by ∈ ("train","none")`，**默认 `"none"`**（完全保持旧行为）。`export` 不进配置哈希，不影响续训 |
+| `Kit/train/trainer.py` | `select_best_by="train"` 且无 validation 时，每个日志点比较训练 loss，创新低即把该步导出到 `export.best` 并记 `best`/`improved`；一步都没选出才退回复制 final |
+| `Kit/tests/test_train.py` | 新增 `TestSelectBestByTrain`（4 项）+ `VShapedLossTask`；远端全量 **346 项 OK**（基线 342 + 4） |
+
+配比口径：日志里的 `loss` 是最近 `log_every` 个**优化步**的平均，覆盖
+`log_every × accum × batch` 个样本（循环里 50×4×512 ≈ 10 万），比单步 loss 稳得多。
+
+配套 loop 配置改动（`5c3d68c`）：顶层 `export` `final.pt` → **`best_model.pt`**、
+`train.export.select_best_by` → **`"train"`**。⚠ Kit 必须先于 loop 升级，
+否则 `loop.py:338` fail-fast 报"训练结束但没有导出候选"。
+
+**第二次重启**（14:28，自对弈安全窗口）：新 loop PID **832414**、子进程 832435，
+1326 局数据保留。
+
+**为什么这次是零风险**：若 gen 6 的 loss 单调下降（400 步下大概率如此），
+`best_model.pt` 与 `final.pt` 逐位相同，改动不起作用；若中途仍有回升，
+则恰好兜住。等价于给"训过头"上了一道与步数无关的保险。
+

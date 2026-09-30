@@ -36,6 +36,11 @@ gen 1（+73.8）与 gen 3（+65.1）两个 arena 验证的新冠军都以该文�
 lr 仍为锁定值 5e-4。gen 6 起按新配置训练（自对弈窗口内重启，已写 998 局完整保留，
 稳态 7.50 s/局），预计 **20:12** 跑完自对弈、判决 **20:30–21:00**。
 
+**14:28 第二批**（§3.2）：候选改取 `best_model.pt` 并开启 Kit 的
+`select_best_by=train`（无 validation 时按训练 loss 最低步导出）。
+第二次重启，新 loop PID **832414**，1326 局数据保留。gen 6 预期顺延到
+自对弈约 **20:15** 完成、判决 **20:30–21:00**。
+
 gen 3–9 按锁定配置训练 = **lr 5e-4 + 1cycle(400 步) + wd 1e-4 + 自对弈配比 0.5**，
 注意**锁的是筛选赛胜者、不是 arena 判决**（§5.2）。
 （这一行会过期，以 `loop_state.json` 为准。）
@@ -153,6 +158,46 @@ arena SPRT 三条参数、`games 4096`、`enumerate_generations 3`。
 
 **gen 6 预期**：自对弈剩 3023 局 × 7.50 s = **6.3 h**，约 **20:12 本地**跑完；
 训练 400 步约 3.5 min；arena 判决预计 **20:30–21:00 本地**。
+
+### 3.2 第二批：候选改取 best_model.pt（2026-09-30 14:28 落地）
+
+§3.1 只修了 gen 4 事故的两个根因之一（步数过长），第二个——**导出的点是全程最差的
+点**——靠 Kit 侧修，commit `bf17fd5`：
+
+- `Kit/train/config.py`：`export` 新增 `select_best_by ∈ ("train","none")`，
+  **默认 `"none"`**（完全保持旧行为，任何现有配方的速度与语义都不变）。
+  `export` 整体不进配置哈希，加开关不影响续训。
+- `Kit/train/trainer.py`：`select_best_by="train"` 且无 validation 时，在每个日志点
+  比较训练 loss（最近 `log_every` 个优化步的平均，覆盖
+  `log_every×accum×batch` 个样本，循环里约 10 万，足够稳），创新低就把该步导出到
+  `export.best` 并在日志记 `best`/`improved`。只有一步都没选出（极短训练 /
+  续跑紧贴结尾、整个区间没落到 log 点）才退回复制 final。
+- `Kit/tests/test_train.py`：新增 `TestSelectBestByTrain`（4 项）+
+  `VShapedLossTask`（CE 之外叠一个以 step 为自变量的 U 形偏置，1:1 复刻 gen 4 的形状，
+  否则"best=loss 最低点"和"best=final 副本"分不开）。远端全量 **346 项 OK**
+  （原基线 342 + 4）。
+
+配套改 loop 配置（commit `5c3d68c`）：
+
+| 字段 | 原值 | 新值 |
+|---|---|---|
+| 顶层 `export`（`Loop.candidate_path` 用，arena/screens 同源） | `"final.pt"` | **`"best_model.pt"`** |
+| `train.export.select_best_by` | （无，默认 none） | **`"train"`** |
+
+⚠ **耦合**：loop 的 `export=best_model.pt` 依赖 Kit 的 `select_best_by`。
+Kit 必须在 loop 之前升级，否则 `loop.py:338` 会因找不到候选文件 fail-fast
+（不静默、不坑人）。
+
+**第二次重启**（14:28，同样是 `phase=selfplay` 安全窗口）：新 loop PID **832414**，
+自对弈子进程 832435，1326 局数据完整保留。稳态约 7 s/局（头一分钟仍是预热）。
+
+**gen 6 更新的预期**：剩约 2746 局 × 7.5 s ≈ 5.7 h → 自对弈约 **20:15 本地**完成；
+训练 400 步约 3.5 min；arena 判决预计 **20:30–21:00**。
+
+**这一批解决了 gen 4 事故的第二个根因**，两条合起来的口径是：
+轨迹不再过长（步数 400）+ 导出的点是最优点而非终点（best_model.pt）。
+对 gen 6 而言，若 loss 单调下降（400 步下大概率如此），`best_model.pt` 与
+`final.pt` 逐位相同，这次改动是**零风险的保险**；若中途仍有回升，则恰好兜住。
 
 gen 0 那次假阴性是 `Kit/pipelines/match.py` 的快照不一致 bug（`workers>1` 才暴露），
 已修为"越界即冻结判决"，gen 1 的 arena 就是这个修复的现场证明——同样出现
