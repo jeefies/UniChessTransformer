@@ -95,7 +95,8 @@
     },
     "export": {
       "best": "best_model.pt",
-      "final": "final.pt"
+      "final": "final.pt",
+      "select_best_by": "train"
     },
     "variants": [
       {
@@ -147,7 +148,7 @@
       "workers": 2
     }
   },
-  "export": "final.pt",
+  "export": "best_model.pt",
   "arena": {
     "match": {
       "pairs": 256,
