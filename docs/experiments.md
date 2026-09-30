@@ -1040,5 +1040,40 @@ gen 3 无筛选赛，按 §18.5 那份锁定的 `lr 5e-4 + 1cycle + wd 1e-4` 直
    已重启（PID 308690），`/api/health` + 两个 preset 的开局对局均正常，
    journal 无 error/traceback。血统链：`stratified_p4_selfplay_corrected` →
    loop_p4 gen0（+163 Elo，直接打赢被替换的生产权重）→ v2 gen1（+73.8）→ v2 gen3。
-   回滚 = 改回旧 ckpt 路径后重启 `unichess-server`。
+    回滚 = 改回旧 ckpt 路径后重启 `unichess-server`。
+
+### 18.8 gen 4：锁定代二番战，−74.8 Elo 硬 H0（2026-09-30）
+
+gen 4 同样无筛选赛，锁定的 lr 5e-4 + onecycle + wd 1e-4 直接训练。
+**gen 3 的换代红利没有延续：gen 4 的候选比新冠军（gen 3）弱 75 Elo。**
+
+| 阶段 | 耗时 | 备注 |
+|---|---|---|
+| 自对弈 4096 局 | 9.45 h | 8.28 s/局（与 gen 3 一致） |
+| 训练 1200 步 | 11 min | lr 峰值 5e-4，onecycle 退火到底 |
+| 最终 arena | **13.2 min**（790 s，仅 33 局） | SPRT 早停，H0 |
+| 合计 | 9.76 h | 与锁定代预算一致 |
+
+**最终 arena**：a = `gen_0004/train/final.pt`，b = gen 3 新冠军，256 对封顶 / 2400 sims /
+合成开局库 / seed 20260926 / elo1=60：
+
+| 指标 | 值 |
+|---|---|
+| 成绩 | 8 胜 10 和 15 负，score_a **0.3939**，Elo **−74.8**，CI95 [−185.2, +22.0] |
+| SPRT | llr **−2.672**（越下界 −2.251 发生在第 **14** 局）、`verdict=H0`、`stopped_by_sprt=true` |
+| 其它 | `duplicate_rate` 0.0、`mean_plies` 149.2、`elapsed_s` 790.1 |
+
+判 **promoted=false**。连续未换代计数 = 1（gen 4），暂停线仍是 3 代。
+
+关键信号：
+
+- gen 4 的 llr **一直在下界下方**（不像 gen 2 的收尾 llr 被在途局拉回 +0.284），
+  所以"gen 4 只是不够好"的说法站不住——**候选是真的比冠军差**，不是统计噪音。
+- lr 5e-4 轨迹现在是 **1 胜 1 负**（gen 3 +65.1 H1 vs gen 4 −74.8 H0），胜负各一，
+  没有稳定结论。gen 5（同样 lr 5e-4）的结果将决定 streak 是否来到 2。
+- 唯一经 arena 验证过"稳赢"的 lr 仍是 **1e-4**（gen 1  championship +73.8 H1）；
+  5e-4 的筛选赛优势（gen 2 的 0.622 vs 1e-4 的 0.574）已被 gen 3/4 的 arena 结果否定。
+- gen 5 已起跑（`first_game=20480`，3787/4096 局，01:29 本地起跑），
+  预计 10:55 跑完自对弈、arena 判决约 11:40–12:00。若 gen 5 也 H0 = 连续 2 代，
+  下一代会触发暂停纪律（3 代），届时必须人工决策：改回 lr 1e-4 / 扩大枚举 / 其他。
 
