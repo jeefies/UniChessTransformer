@@ -1,15 +1,15 @@
 {
   "max_mcts": {
-    "ckpt": "/home/jeefy/UniChess/Transformer/runs/loop_p4_v2/gen_0003/train/final.pt",
+    "ckpt": "/home/jeefy/UniChess/Transformer/runs/loop_p4_v2/gen_0007/train/best_model.pt",
     "mcts_sims": 2400,
     "mcts_batch": 64,
     "device": "cuda",
     "precision": "fp16",
     "syzygy_path": "/home/jeefy/UniChess/data/raw/syzygy345",
-    "description": "UniChess-Loop P4 v2 gen3 (Max MCTS 2400; arena +65.1 Elo H1 vs gen1 champion)"
+    "description": "UniChess-Loop P4 v2 gen7 (Max MCTS 2400; arena +50.0 Elo H1 vs gen3 champion)"
   },
   "max_t": {
-    "ckpt": "/home/jeefy/UniChess/Transformer/runs/loop_p4_v2/gen_0003/train/final.pt",
+    "ckpt": "/home/jeefy/UniChess/Transformer/runs/loop_p4_v2/gen_0007/train/best_model.pt",
     "mcts_sims": 2400,
     "mcts_batch": 64,
     "device": "cuda",
@@ -17,6 +17,6 @@
     "syzygy_path": "/home/jeefy/UniChess/data/raw/syzygy345",
     "temperature": 1.0,
     "root_top_k": 3,
-    "description": "UniChess-Loop P4 v2 gen3 (Max MCTS 2400 + temperature 1.0 with top-3 root narrowing; arena +65.1 Elo H1)"
+    "description": "UniChess-Loop P4 v2 gen7 (Max MCTS 2400 + temperature 1.0 with top-3 root narrowing; arena +50.0 Elo H1 vs gen3 champion)"
   }
 }
