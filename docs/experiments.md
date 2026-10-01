@@ -1792,3 +1792,69 @@ gen 6/7 换到 400 步后过训练消失，再靠「自对弈占比 + 目标降�
   现在**不再是高优先级**——PUCT + 降噪已经能稳定换代。Phase 3（让增益累积）
   同理可以让位，除非接下来几代又连续 H0。
 
+### 18.18 生产切换到 gen 0007；select_best_by 首次真正生效（2026-10-01 23:23）
+
+#### 生产切换
+
+`Transformer/config.json` 两个预设备份（`max_mcts` / `max_t`）的 `ckpt` 从
+`gen_0003/train/final.pt` 改到 **`gen_0007/train/best_model.pt`**（提交 `c869189`）。
+只改 `ckpt` 与 `description`；`mcts_sims 2400` / `mcts_batch 64` / `precision fp16` /
+`temperature 1.0` / `root_top_k 3` 一律未动。重启 `unichess-server` 后：
+
+- 新 PID 1603214，`/api/health` 200，`unichess-server` / `unichess-tunnel` 均 active
+- `/api/models`：T `status=available`，`presets=['max_mcts','max_t']`
+- **两个预设各实测对局**（标准起始 FEN，`engine_white=true`）：
+
+| 预设 | 我方序列 | 引擎应手 | sims / depth |
+|---|---|---|---|
+| `max_mcts` | e7e5, g8f6, f8b4, e8g8 | g1f3, f3e5, a2a3, a3b4 | 2400 / 13–15 |
+| `max_t` | e7e5, g8f6, f8b4, e8g8 | b1c3, g1f3, f3e5, e2e3 | 2400 / 10–15 |
+
+着法全部合法，`result.info` 里 sims/nodes/depth/q/pv 完整；
+`max_t`（temperature 1.0 + root_top_k 3）选点明显比 `max_mcts` 更多样，符合预期。
+journal 重启后 0 条 error/traceback（期间的 400/404 是验证脚本自己发错的请求）。
+
+回滚 = 把两个 `ckpt` 改回 `gen_0003/train/final.pt` 后重启 server（gen_0003 权重仍在）。
+
+#### select_best_by 的完整闭环验证（gen 8）
+
+gen 8 的 base 是新冠军 `gen_0007/train/best_model.pt`——**冠军变强后 base 更接近
+本份数据的最优点，于是 400 步的曲线第一次不再单调**：
+
+| step | lr | loss |
+|---|---|---|
+| 1 | 2.01e-05 | 1.197339 |
+| 200 | 3.73e-04 | 1.131214 |
+| **300** | 1.23e-04 | **1.112694（最低点）** |
+| 400 | 1.57e-08 | 1.115763（回升 +0.0031） |
+
+这正是 gen 4 那个"训过头"模式的轻微重现（gen 4 回升 0.0255，gen 8 只 0.0031，
+差约 8 倍）。而 `select_best_by=train` 恰好兜住了它：
+
+```
+train.jsonl: step 1→300 每步 improved=true，best 一路降到 1.1126938629150391
+             step 400: {"validation": {}, "best": 1.11269..., "improved": false}
+                       —— best 没有跟着 loss 回升到 1.1158
+
+best_model.pt: step = 300        final.pt: step = 400
+816 个张量里 792 个不同，权重差 L2 = 5.528803
+```
+
+gen 7 是完美对照：最低点就在终点，`best.step=400 == final.step=400` 且逐位相同。
+
+**结论：Kit `cf831fa` 修的那条路径，从"修好"走到"真的在关键时刻抓住不同权重"**——
+gen 7 验证曲线单调时 best == final（零风险保险），gen 8 验证曲线非单调时
+best 抓住最优步（导出 step 300 而非 400）。arena 正在测的就是 step 300 的权重，
+所以 gen 8 若判 H1，换代的权重来自最优步而非终点。
+
+#### 一个要盯的趋势
+
+gen 8 曲线重新出现轻微 overshoot，与 §18.15 第五节的判断一致：**冠军越强、
+base 越接近数据最优点，同一套 400 步预算就开始从"有余量"变成"微微过头"**。
+幅度只有 gen 4 的 1/8 且被 `select_best_by` 兜住，暂不需要动步数；
+但它应作为下一轮的先行指标——**若后面几代 overshoot 幅度继续变大（如超过 0.01），
+就该像这次一样先看曲线再决定缩步数还是别的**。
+
+另：gen 8 自对弈终局构成延续 gen 7 的变化——`insufficient_material` 457 局、
+`checkmate` 3166（77.3%），另出现 3 局 `truncated`（超 max_plies 400）。
+
