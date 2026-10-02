@@ -1,7 +1,7 @@
 {
   "out": "/home/jeefy/UniChess/Transformer/runs/loop_p4_v2",
   "seed_base": 20260930,
-  "generations": 10,
+  "generations": 16,
   "initial": "/home/jeefy/UniChess/Transformer/runs/loop_p4/gen_0000/train/final.pt",
   "games": 4096,
   "window": 2,
@@ -16,7 +16,8 @@
       "syzygy_path": "/home/jeefy/UniChess/data/raw/syzygy345",
       "dirichlet_alpha": 0.3,
       "dirichlet_eps": 0.1,
-      "root_min_visits": 4
+      "root_min_visits": 4,
+      "temperature": 2.0
     }
   },
   "selfplay": {
