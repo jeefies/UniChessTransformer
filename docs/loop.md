@@ -27,28 +27,32 @@ gen 1（+73.8）与 gen 3（+65.1）两个 arena 验证的新冠军都以该文�
 血统：`stratified_p4_selfplay_corrected/best_model.pt` → loop_p4 gen0 +163
 → v2 gen1 +73.8 → v2 gen3 +65.1。回滚 = 改回旧 ckpt 路径后重启。
 
-截至 **2026-10-01 23:35 本地**：gen 7 判 **H1 换代成功**（Phase 1 第一代，
-Elo **+50.0** / score_a 0.5714 / 133 局 / llr +2.961 第 113 局越上界），
-新冠军 = `gen_0007/train/best_model.pt`，**streak 清零、暂停纪律解除**，
-**且生产权重已于 23:23 切到 gen_0007**（config.json `c869189`，server PID 1603214，
-两个预设实测对局正常）。
+截至 **2026-10-02 13:25 本地**：**v2 十代已全部跑完**（`generations: 10` 的下限到了，
+`Loop.run()` 正常返回，`loop.log` 末行是 `main()` 打印的返回值——**不是崩溃**）。
+冠军 = `gen_0007/train/best_model.pt` = **现生产权重**，一致。
 
-loop 已推进到 **generation=8 / phase=arena**（gen 8 自对弈 4096 局已完成，
-base = gen_0007，arena a = `gen_0008/train/best_model.pt`）。
+| 代 | 判决 | Elo | score_a | 局数 | CI95 含 0？ |
+|---|---|---|---|---|---|
+| gen 1 / 3 / 7 | **H1 换代** | +73.81 / +65.09 / +49.98 | 0.60 / 0.59 / 0.57 | 43 / 81 / 133 | — |
+| gen 0 / 2 / 5 / 6 / 8 | H0 | +41.5 / +44.8 / −15.5 / −9.4 / −52.0 | — | 101 / 39 / 45 / 37 / 74 | 是 |
+| gen 4 / 9 | H0 **显著更差** | −74.83 / **−157.34** | 0.394 / **0.288** | 33 / 33 | gen4 是，**gen9 否（[−303.5, −50.8]）** |
 
-⚠ **gen 8 的曲线第一次不再单调**：最低点在 step 300（1.112694），
-step 400 回升到 1.115763（+0.0031，仅为 gen 4 那次的 1/8）。
-`select_best_by=train` 兜住了它——`best_model.pt` 落在 **step 300**，
-与 `final.pt`（step 400）有 792/816 个张量不同。gen 7 是对照（最低点在终点，
-best 与 final 逐位相同）。见 `experiments.md` §18.18。
+血统链（每步 H1 验证，现生产 = gen_0007）：
+`stratified_p4_selfplay_corrected` → loop_p4 gen0（+163）→ v2 gen1（+73.8）
+→ v2 gen3（+65.1）→ **v2 gen7（+50.0）**。
 
-当前锁定训练配置 = **lr 5e-4 + 1cycle(400 步) + wd 1e-4 + 自对弈配比 0.3/0.7
-+ dirichlet_eps 0.1 + root_min_visits 4 + arena pairs 512 + seed_base 按代换种子**。
-（这一行会过期，以 `loop_state.json` 为准。）
+⚠ **最关键的新证据（`experiments.md` §18.20）**：gen 7/8/9 三代**同一个 base**，
+training loss 全大幅下降（−0.146 / −0.082 / −0.113），但 Elo 是 **+50 / −52 / −157**。
+**在这个收敛基座上，train loss 与 Elo 已脱钩**——loss 照降、棋力照崩。
+`select_best_by=train` 确实抓到了最低点（gen 8/9 的 best 都在 step 300），
+但最低点那份权重仍比 base 差很多。**best-checkpoint 机制是对的，判据错了。**
 
-gen 3–9 按锁定配置训练 = **lr 5e-4 + 1cycle(400 步) + wd 1e-4 + 自对弈配比 0.5**，
-注意**锁的是筛选赛胜者、不是 arena 判决**（§5.2）。
-（这一行会过期，以 `loop_state.json` 为准。）
+**因此不要**调大 `generations` 用同一份配方接着跑——gen 8/9 两次都在恶化，
+且 gen 9 已显著。四条待人工决策的方向（Gumbel completed-Q 目标 / 给训练配真验证信号 /
+换有余量的 base / 收缩 lr）见 §18.20 末尾。
+
+资源现状：GPU 空闲（983 MiB、0%），server PID 1603214 / tunnel 均 active、
+`/api/health` 200、journal 近 1 h 0 错误，磁盘 212 G 可用。
 
 > **生产权重已落后两代**：v2 线上有两个经 arena 验证的新冠军（gen 1 +73.8、gen 3 +65.1），
 > 而 `config.json` 仍指向 `runs/stratified_p4_selfplay_corrected/best_model.pt`。
