@@ -7,17 +7,14 @@
   "window": 2,
   "engine": {
     "root": "/home/jeefy/UniChess",
-    "factory": "Transformer.kit:make_player_factory",
+    "factory": "Transformer.kit:make_gumbel_player_factory",
     "kwargs": {
       "checkpoint": "{weights}",
-      "simulations": 800,
-      "batch_size": 64,
+      "simulations": 1600,
+      "m0": 16,
+      "g": 1.0,
       "precision": "fp16",
-      "syzygy_path": "/home/jeefy/UniChess/data/raw/syzygy345",
-      "dirichlet_alpha": 0.3,
-      "dirichlet_eps": 0.1,
-      "root_min_visits": 4,
-      "temperature": 2.0
+      "temperature": 1.0
     }
   },
   "selfplay": {
@@ -70,7 +67,8 @@
           "policy_weight": 1.0,
           "promo_weight": 0.1,
           "wdl_weight": 1.0,
-          "policy_loss_type": "kl_divergence"
+          "policy_loss_type": "kl_divergence",
+          "anchor_weight": 2.0
         }
       }
     },
