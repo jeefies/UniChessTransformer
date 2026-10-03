@@ -28,7 +28,7 @@ from pathlib import Path
 from typing import Optional
 
 from Kit.planes19 import BatchFnEvaluator, make_search_player_factory
-from Kit.players.gumbel_player import make_gumbel_player_factory
+from Kit.players.gumbel_player import make_gumbel_player_factory as _kit_gumbel_factory
 
 from .evaluator import TransformerEngine
 from .model import (ChessTransformer, STRATIFIED_CFG, StratifiedChessTransformer, TransformerConfig,
@@ -114,7 +114,7 @@ def make_gumbel_player_factory(checkpoint=None, *, preset: Optional[str] = None,
     for dead in ("syzygy_path", "search_impl", "batch_size", "dirichlet_alpha",
                  "dirichlet_eps", "root_min_visits"):
         opts.pop(dead, None)          # PUCT 专用键：静默丢掉会让 typo 更难查，显式列出
-    return make_gumbel_player_factory(name, planes_evaluator, **opts)
+    return _kit_gumbel_factory(name, planes_evaluator, **opts)
 
 
 def make_player_factory(checkpoint=None, *, preset: Optional[str] = None, name: str = "T",
