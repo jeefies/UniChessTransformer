@@ -2204,3 +2204,25 @@ gen_0007 同一张网：2400 sims vs 800 sims，34 局（26 胜 0 负 8 和）�
 - 修掉一个真 bug：`kg_begin` 未复位搜索状态 → 同一 ctx 第二次搜索直接返回上一次的
   finished/action/sims_used（Player 每步复用 ctx 才暴露）；已加 ctx 复用对照测试。
 
+## §18.25 训练显存实测与压缩（16 GB 卡，2026-10-03）
+
+| 配置（有效批 2048） | torch 分配器峰值 | 进程峰值（nvidia-smi） | 3 步墙钟 |
+|---|---|---|---|
+| micro 512 × accum 4（旧，默认分配器） | ~10.9 GB | ~11 GB | — |
+| micro 512 × accum 4 + expandable_segments | 7120 MiB | 7516 MiB | 4.4 s |
+| micro 128 × accum 16 + 同上 | 2579 MiB | 2952 MiB | 6.8 s |
+| **micro 64 × accum 32 + 同上** | **1822 MiB** | **2264 MiB** | 10.4 s |
+| micro 64 × accum 32 + anchor_weight=2 | **2079 MiB** | **2516 MiB** | — |
+
+- 模型是 **122.1M 参数**（fp32 权重 466 + 梯度 466 + AdamW 两态 931 ≈ **1.82 GB**）——
+  这是**不可再压的底**（再往下要换 bf16 优化器状态，属数值口径变更，本轮不做）。
+- 激活随 microbatch 近似线性：bs512 时 ~5 GB、bs64 时 ~0（bs64 的峰值就是权重+优化器）。
+- 落地两处：`Kit 8dbb1ee`（trainer 默认 `PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`，
+  纯分配器行为）省了 10.9→7.5 GB；`Transformer e957bf5`（loop microbatch 512→64、
+  accum 4→32，有效批不变）再省到 **~2.5 GB**。代价：**每代训练 ~5 min → ~12 min**
+  （自对弈 28 h 面前可忽略）。
+- 自对弈/推理侧本来就只有 ~1.1 GB；server 空闲 ~0.96 GB。
+- 口径说明：microbatch/accum 改变会改变训练轨迹的舍入与批内组成（有效批与统计口径不变），
+  与 stage2 的 bs512 筛选用的是同一有效批；按固定配置仍然逐位可复现（E4 口径）。
+- `Kit 3fdc8e5`：训练摘要新增 `peak_vram_mb`，以后每代落盘可查。
+
