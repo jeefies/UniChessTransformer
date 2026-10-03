@@ -28,6 +28,7 @@ from pathlib import Path
 from typing import Optional
 
 from Kit.planes19 import BatchFnEvaluator, make_search_player_factory
+from Kit.players.gumbel_player import make_gumbel_player_factory
 
 from .evaluator import TransformerEngine
 from .model import (ChessTransformer, STRATIFIED_CFG, StratifiedChessTransformer, TransformerConfig,
@@ -86,6 +87,34 @@ def make_evaluator(checkpoint=DEFAULT_CKPT, *, device: str = "cuda", precision: 
                    max_batch: Optional[int] = 256) -> BatchFnEvaluator:
     return make_evaluators(checkpoint, device=device, precision=precision,
                            max_batch=max_batch)[0]
+
+
+def make_gumbel_player_factory(checkpoint=None, *, preset: Optional[str] = None, name: str = "T",
+                               device: Optional[str] = None, precision: Optional[str] = None,
+                               max_batch: Optional[int] = 256, **gumbel_kwargs):
+    """Gumbel 自对弈出厂（``GumbelCpp`` + ``GumbelPlayer``；训练目标是 π′）。
+
+    ``preset`` 取 config.json 的值作默认，显式参数优先；其余透传给
+    ``Kit.players.gumbel_player.make_gumbel_player_factory``
+    （simulations / m0 / g / temperature / c_visit / c_scale / claim_draw /
+    book_path / book_plies）。注意**不接受** PUCT 专用的 dirichlet_* / root_min_visits。
+    """
+    gumbel_kwargs = {_PRESET_KEYS.get(k, k): v for k, v in gumbel_kwargs.items()
+                     if k not in _PRESET_IGNORED}
+    explicit = dict(checkpoint=checkpoint, device=device, precision=precision)
+    opts = {**(load_preset(preset) if preset else {}),
+            **{k: v for k, v in explicit.items() if v is not None}, **gumbel_kwargs}
+    _evaluator, planes_evaluator = make_evaluators(
+        opts.pop("checkpoint", DEFAULT_CKPT),
+        device=opts.pop("device", "cuda"),
+        precision=opts.pop("precision", "fp16"),
+        max_batch=opts.pop("max_batch", max_batch))
+    if opts.get("book_path"):
+        opts["book_path"] = str(_resolve(opts["book_path"]))
+    for dead in ("syzygy_path", "search_impl", "batch_size", "dirichlet_alpha",
+                 "dirichlet_eps", "root_min_visits"):
+        opts.pop(dead, None)          # PUCT 专用键：静默丢掉会让 typo 更难查，显式列出
+    return make_gumbel_player_factory(name, planes_evaluator, **opts)
 
 
 def make_player_factory(checkpoint=None, *, preset: Optional[str] = None, name: str = "T",
