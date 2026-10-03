@@ -37,7 +37,7 @@
         "base_ckpt": "{weights}",
         "data": {
           "kind": "mix",
-          "batch_size": 512,
+          "batch_size": 64,
             "sources": [
               {
                 "weight": 0.3,
@@ -73,7 +73,7 @@
       }
     },
     "steps": 400,
-    "accum": 4,
+    "accum": 32,
     "seed": 42,
     "device": "cuda",
     "precision": "bf16",
