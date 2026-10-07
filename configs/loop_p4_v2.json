@@ -37,7 +37,7 @@
         "base_ckpt": "{weights}",
         "data": {
           "kind": "mix",
-          "batch_size": 64,
+          "batch_size": 256,
             "sources": [
               {
                 "weight": 0.3,
@@ -73,7 +73,7 @@
       }
     },
     "steps": 400,
-    "accum": 32,
+    "accum": 8,
     "seed": 42,
     "device": "cuda",
     "precision": "bf16",
@@ -148,7 +148,7 @@
       "concurrency": 8,
       "openings": "/home/jeefy/UniChess/Kit/data/openings_sp.txt",
       "simulations": 800,
-      "workers": 2
+      "workers": 4
     }
   },
   "export": "best_model.pt",
@@ -166,7 +166,7 @@
         "alpha": 0.05,
         "beta": 0.1
       },
-      "workers": 2
+      "workers": 4
     },
     "gate": {
       "kind": "sprt"
