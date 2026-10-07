@@ -72,13 +72,23 @@ class TransformerEngine:
     # ---------------------------------------------------------------- 前向
     @torch.no_grad()
     def evaluate_planes(self, xs: np.ndarray):
-        """xs: (N, 19, 8, 8) float32 → (policy[N,4096], promo[N,4], wdl[N,3]) 行棋方视角概率。"""
-        x = torch.from_numpy(np.ascontiguousarray(xs, dtype=np.float32)).to(self.device)
+        """xs: (N, 19, 8, 8) float32 → (policy[N,4096], promo[N,4], wdl[N,3]) 行棋方视角概率。
+
+        分层模型的路由在 CPU 侧按同一子力数判据直接算好再传 ``route_indices``（模型内
+        GPU 归约 + 每行一次 ``.item()`` 同步的默认路径在大批量下是纯开销）。子力数是
+        0/1 平面的小整数和，fp32 求和任意顺序都精确，判据与顺序完全一致，**数值逐位不变**。
+        """
+        x32 = np.ascontiguousarray(xs, dtype=np.float32)
+        x = torch.from_numpy(x32).to(self.device)
+        kwargs = {}
+        if self.stratified:
+            pc = x32[:, :12].sum(axis=(1, 2, 3))
+            kwargs["route_indices"] = np.where(pc >= 24, 0, np.where(pc > 12, 1, 2)).tolist()
         if self.dtype is not None:
             with torch.autocast(device_type=self.device.type, dtype=self.dtype):
-                p_l, pr_l, w_l = self.model(x)
+                p_l, pr_l, w_l = self.model(x, **kwargs)
         else:
-            p_l, pr_l, w_l = self.model(x)
+            p_l, pr_l, w_l = self.model(x, **kwargs)
         return (torch.softmax(p_l.float(), dim=-1).cpu().numpy(),
                 torch.softmax(pr_l.float(), dim=-1).cpu().numpy(),
                 torch.softmax(w_l.float(), dim=-1).cpu().numpy())
