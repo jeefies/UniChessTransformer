@@ -10,13 +10,14 @@
 - 三个头都在 ``.float()`` 之后 softmax，CPU 上取回；
 - 分层路由模型从平面 0-11 数子力决定专家，不需要棋盘，kit 的 C++ PUCT 只给平面也能走。
 
-CUDA graph（2026-10-09，``_CudaGraphRunner``）：自对弈/arena 的批量只有 1-64，
-前向 ~300 次 kernel 发射里 ~68% 是纯发射开销（``experiments.md`` §18.27 微基准：
-旧路径 12.5 ms，图回放 2.15 ms = 5.83×，同形状 max|Δ|=0）。捕获按
-``(N, k0, k1, k2)``（批大小 × 三个专家各行数）分桶：分层模型按专家拆批，
-子批形状随路由计数变，所以计数必须进 key；拆批/散射用**静态 GPU 索引张量**
-在捕获区内做，全部 H2D 在图外。捕获失败、N 超限或桶数超限 → 该形状永久回退
-eager；``UNICHESS_T_NO_CUDAGRAPH=1`` 一键全关。softmax/取回保持在图外与旧路径一致。
+CUDA graph（2026-10-09，``_CudaGraphRunner``，**默认关**）：自对弈/arena 的前向是
+~300 次 kernel 发射的 launch-bound 小批，§18.27 微基准（干净 GPU、m=64）显示图回放
+5.83×/7.26×。工程化按 ``(N, k0,k1,k2)``（批大小 × 三专家各行数）分桶捕获：
+拆批/散射用静态 GPU 索引张量在捕获区内做，H2D 全部在图外；与 eager 逐位一致
+（同形状回放同 kernel，单测 17 种形状 + 两种回退路径全绿）。**但生产 A/B 无增益**
+（3000 局 ×2 轮、覆盖率 ~90%，端到端 0.98×）：每次搜索仅 ~3 次前向调用且批被合并到
+N>64，前向只占搜索耗时 ~15%——发射开销理论上限 ~1.1×，详见 §18.31。故默认关闭，
+``UNICHESS_T_CUDAGRAPH=1`` 启用；softmax/取回保持在图外与旧路径一致。
 """
 from __future__ import annotations
 
@@ -34,13 +35,20 @@ from .model import TransformerConfig, load_model
 
 ROOT = Path(__file__).resolve().parent
 
-#: 图前向的总开关（环境变量）；排查问题或对拍时置 1 即全走 eager
+#: 图前向的启用开关（环境变量）。**默认关**：2026-10-09 生产 A/B（3000 局 ×2 轮、
+#: 覆盖率 ~90%）实测端到端 0.98×——自对弈每次搜索只有 ~3 次 evaluate_planes 调用
+#: （C++ 一整轮叶子合成一个请求、batcher 再跨 32 局合并成 N>64 的大批），前向只占
+#: 搜索耗时 ~15%，图消灭的发射开销理论上限 ~1.1×，被捕获税与噪声吃平。微观基准
+#: （N≤64 全覆盖 1.6-2.0×、逐位一致）见 experiments.md §18.31。留待前向占比变大
+#: （更大模型 / 更小批）再打开；``UNICHESS_T_NO_CUDAGRAPH=1`` 可随时硬关。
+_GRAPH_ON_ENV = "UNICHESS_T_CUDAGRAPH"
 _NO_GRAPH_ENV = "UNICHESS_T_NO_CUDAGRAPH"
-#: 只给小批量建图：N 大到此值以上发射开销已被摊薄，建图收益趋零
-_GRAPH_MAX_N = 64
-#: 桶数上限（每个桶持一份图私池显存；N≤64 的激活图池约 10-20 MB/桶）；超出走 eager
-_GRAPH_MAX_BUCKETS = 256
-#: 进程退出时打印图前向统计（桶数/回退/命中），用于生产 key 空间普查
+#: 建图的批大小上限（与 BatchFnEvaluator 的 max_batch=256 对齐；再大收益趋零）
+_GRAPH_MAX_N = 256
+#: 桶数上限（每个桶持一份图私池显存；实测 ~0.3-0.9 GB / 512 桶 / worker）。
+#: 512 是实测生产 key 空间（单 worker 最多 ~650 个 (N,计数) 组合）的上沿
+_GRAPH_MAX_BUCKETS = 512
+#: 进程退出时打印图前向统计（桶数/回退/命中/批大小分布），用于生产 key 空间普查
 _GRAPH_STATS_ENV = "UNICHESS_T_GRAPH_STATS"
 
 
@@ -214,9 +222,11 @@ class TransformerEngine:
                       if self.device.type == "cuda" else None)
         self.stratified = any(k.startswith(("experts.", "opening."))
                               for k in self.ckpt.get("model", {}))
-        # CUDA graph 前向（CPU / 环境变量关闭时保持原 eager 路径）
+        # CUDA graph 前向：**默认关**（生产 A/B 无增益，见 _GRAPH_ON_ENV 注释与
+        # experiments.md §18.31）；置 UNICHESS_T_CUDAGRAPH=1 启用，CPU 自动走 eager
         self.graphs: Optional[_CudaGraphRunner] = None
-        if self.device.type == "cuda" and not os.environ.get(_NO_GRAPH_ENV):
+        if (self.device.type == "cuda" and os.environ.get(_GRAPH_ON_ENV)
+                and not os.environ.get(_NO_GRAPH_ENV)):
             try:
                 self.graphs = _CudaGraphRunner(self)
                 if os.environ.get(_GRAPH_STATS_ENV):

@@ -63,18 +63,17 @@ class TestCudaGraphParity(unittest.TestCase):
         cls.ckpt = _fake_stratified_ckpt(cls.tmp)
 
     def _pair(self, precision: str):
-        """同一权重的两个 engine：一个全 eager（环境变量关图），一个开图。"""
-        old = os.environ.get(ev._NO_GRAPH_ENV)
-        os.environ[ev._NO_GRAPH_ENV] = "1"
+        """同一权重的两个 engine：eager（图默认关）+ 开图（环境变量启用）。"""
+        for k in (ev._GRAPH_ON_ENV, ev._NO_GRAPH_ENV):
+            os.environ.pop(k, None)
+        eager = TransformerEngine(str(self.ckpt), device="cuda", precision=precision)
+        self.assertIsNone(eager.graphs, "图前向默认应为关（生产 A/B 无增益，§18.31）")
+        os.environ[ev._GRAPH_ON_ENV] = "1"
         try:
-            eager = TransformerEngine(str(self.ckpt), device="cuda", precision=precision)
+            graphed = TransformerEngine(str(self.ckpt), device="cuda", precision=precision)
         finally:
-            if old is None:
-                os.environ.pop(ev._NO_GRAPH_ENV, None)
-            else:
-                os.environ[ev._NO_GRAPH_ENV] = old
-        graphed = TransformerEngine(str(self.ckpt), device="cuda", precision=precision)
-        self.assertIsNotNone(graphed.graphs, "CUDA 可用时图前向应启用")
+            os.environ.pop(ev._GRAPH_ON_ENV, None)
+        self.assertIsNotNone(graphed.graphs, "置了 UNICHESS_T_CUDAGRAPH=1 就应启用")
         return eager, graphed
 
     def _check(self, precision: str, n: int, seed: int):
