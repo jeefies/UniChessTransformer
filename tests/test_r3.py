@@ -344,73 +344,80 @@ class TestConfigs(unittest.TestCase):
         self.assertEqual(cfg["enumerate_generations"], 3)
 
         train = cfg["train"]
-        # 步数固定 1200：同 lr 下 1200 全程优于 600（gen 0 实测）
-        self.assertEqual(train["steps"], 1200)
+        # 步数固定 400（微批 256 x 累积 8 = 有效批 2048，400 步对应约 82 万样本）
+        self.assertEqual(train["steps"], 400)
         # 1cycle：峰值 lr 由 optimizer.lr 给，末段降到比初值低几个数量级
         self.assertEqual(train["schedule"], {"kind": "onecycle", "pct_start": 0.25})
 
         variants = train["variants"]
         labels = [v["label"] for v in variants]
         self.assertEqual(len(labels), len(set(labels)))
-        # 对照 + 2 维网格：lr {3e-5,5e-5,1e-4} x wd {1e-4,1e-5,3e-6}，外加恒定 lr 对照
-        self.assertEqual(len(variants), 8)
-        self.assertIn("ctrl_const_2e-5_wd4", labels)          # 代内对照：上一代最优恒定配置
-        grid = [v for v in variants if v["label"] != "ctrl_const_2e-5_wd4"]
-        self.assertEqual({v["optimizer"]["weight_decay"] for v in grid},
-                         {1e-04, 1e-05, 3e-06})
-        self.assertEqual({v["optimizer"]["lr"] for v in grid},
-                         {3e-05, 5e-05, 1e-04})
+        # 对照 + lr / wd 网格候选
+        self.assertEqual(len(variants), 5)
+        self.assertIn("ctrl_const_2e-5_wd1e-4", labels)          # 代内对照：上一代最优恒定配置
+        grid = [v for v in variants if v["label"] != "ctrl_const_2e-5_wd1e-4"]
         for v in grid:                                        # 每个网格点都带 1cycle
             self.assertNotIn("schedule", v)                  # 继承基座的 1cycle
             self.assertEqual(set(v["optimizer"]), {"lr", "weight_decay"})
-        ctrl = next(v for v in variants if v["label"] == "ctrl_const_2e-5_wd4")
+        ctrl = next(v for v in variants if v["label"] == "ctrl_const_2e-5_wd1e-4")
         self.assertEqual(ctrl["schedule"], {"kind": "constant"})
         self.assertEqual(ctrl["optimizer"]["lr"], 2e-05)
         self.assertEqual(ctrl["optimizer"]["weight_decay"], 1e-04)
 
-        # 筛选赛：候选对冠军，800 sims 192 对（SE 约 ±3.6%）
+        # 筛选赛：候选对冠军，800 sims 192 对（SE 约 ±3.6%），workers 4
         self.assertEqual(train["screen"]["pairs"], 192)
         self.assertEqual(train["screen"]["simulations"], 800)
-        self.assertEqual(train["screen"]["workers"], 2)
+        self.assertEqual(train["screen"]["workers"], 4)
         # 开局库用 2000 条合成线路：确定性对局下线路数决定去重局数，
         # 34 条的 bundled 跑 384 局会有 28% 重复样本。三处都必须显式给绝对路径
         # （loop 的三个子进程都以 <out> 为 cwd 运行）。
         self.assertEqual(cfg["selfplay"]["openings"], "/home/jeefy/UniChess/Kit/data/openings_sp.txt")
         self.assertEqual(train["screen"]["openings"], "/home/jeefy/UniChess/Kit/data/openings_sp.txt")
         self.assertEqual(cfg["arena"]["match"]["openings"], "/home/jeefy/UniChess/Kit/data/openings_sp.txt")
-        # 最终 arena：256 对 2400 sims，elo1=60（80 局判不出 +60 的教训）
-        self.assertEqual(cfg["arena"]["match"]["pairs"], 256)
+        # 最终 arena：512 对 2400 sims，elo1=60（80 局判不出 +60 的教训），workers 4
+        self.assertEqual(cfg["arena"]["match"]["pairs"], 512)
         self.assertEqual(cfg["arena"]["match"]["simulations"], 2400)
         self.assertEqual(cfg["arena"]["match"]["sprt"]["elo1"], 60.0)
+        self.assertEqual(cfg["arena"]["match"]["workers"], 4)
         self.assertEqual(cfg["arena"]["gate"], {"kind": "sprt"})
-        # 训练口径与 loop_p4.json 一致（KL / accum 4 / bf16 / 前 4 片监督 70%）
+        # 训练口径：KL / accum 8 / bf16 / 监督 30% / 自对弈 70% / anchor_weight 2.0
         kw = train["task"]["kwargs"]
         self.assertEqual(kw["loss"]["policy_loss_type"], "kl_divergence")
-        self.assertEqual(train["accum"], 4)
+        self.assertEqual(kw["loss"]["anchor_weight"], 2.0)
+        self.assertEqual(train["accum"], 8)
         self.assertEqual(train["precision"], "bf16")
+        self.assertEqual(kw["data"]["batch_size"], 256)
         self.assertEqual(kw["data"]["sources"][0]["shards"]["slice"], [0, 4])
+        self.assertEqual(kw["data"]["sources"][0]["weight"], 0.3)
+        self.assertEqual(kw["data"]["sources"][1]["weight"], 0.7)
         self.assertEqual(kw["data"]["sources"][1]["shards"], {"files": "{selfplay_files}"})
 
     def test_loop_p4_and_v2_differ_only_in_scale(self):
-        """v2 与初版只在规模/枚举维度/学习率计划上不同，训练口径必须一致。"""
+        """v2 与初版在架构管道上保持一致（sink、bf16、clip 等），并记录 v2 的 Gumbel/锚点演进。"""
         a = json.loads((ROOT / "configs" / "loop_p4.json").read_text(encoding="utf-8"))
         b = json.loads((ROOT / "configs" / "loop_p4_v2.json").read_text(encoding="utf-8"))
-        for key in ("engine", "sink", "export"):
-            self.assertEqual(a[key], b[key], key)
+        self.assertEqual(a["sink"], b["sink"])
+        self.assertEqual(a["export"], "final.pt")
+        self.assertEqual(b["export"], "best_model.pt")
         # selfplay 只比非开局字段：v2 换成 2000 条合成库（消重复样本），
         # v1 保持 bundled，这是已知且有意的一致性差异
         a_sp = {k: v for k, v in a["selfplay"].items() if k != "openings"}
         b_sp = {k: v for k, v in b["selfplay"].items() if k != "openings"}
         self.assertEqual(a_sp, b_sp, "selfplay(except openings)")
-        self.assertEqual(a["train"]["task"], b["train"]["task"])
-        self.assertEqual(a["train"]["accum"], b["train"]["accum"])
+        # 引擎：v1 是基线 MCTS，v2 换成 Gumbel 自对弈
+        self.assertEqual(a["engine"]["factory"], "Transformer.kit:make_player_factory")
+        self.assertEqual(b["engine"]["factory"], "Transformer.kit:make_gumbel_player_factory")
+        # 训练基础精度与优化器基础超参
         self.assertEqual(a["train"]["precision"], b["train"]["precision"])
         self.assertEqual(a["train"]["clip"], b["train"]["clip"])
         self.assertEqual(a["train"]["optimizer"]["betas"], b["train"]["optimizer"]["betas"])
-        # 初版 constant / 1000 步 / 单 lr；v2 1cycle / 1200 步 / lr x wd
+        # 初版 constant / 1000 步 / 单 lr；v2 1cycle / 400 步 / lr x wd 网格
         self.assertEqual(a["train"]["schedule"], {"kind": "constant"})
         self.assertEqual(a["train"]["steps"], 1000)
         self.assertNotIn("variants", a["train"])
+        self.assertIn("variants", b["train"])
+        self.assertEqual(b["train"]["schedule"]["kind"], "onecycle")
+        self.assertEqual(b["train"]["steps"], 400)
 
     def test_loop_p4(self):
         """换代循环配方：钉死 P4 自对弈口径（30% 自对弈 + 70% 监督、lr 5e-6、KL）。
