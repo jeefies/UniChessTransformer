@@ -1,10 +1,37 @@
 # AGENTS.md — UniChess Transformer
 
-> 面向 AI 编码 agent。最后更新：2026-09-28。
+> 面向 AI 编码 agent。最后更新：2026-10-08。
 >
 > **换代循环的一切实测数字、结论与踩过的坑都在 [`docs/loop.md`](docs/loop.md)**，
-> 逐代原始数据与证据链在 [`docs/experiments.md`](docs/experiments.md)（§15/§16/§17）。
+> 逐代原始数据与证据链在 [`docs/experiments.md`](docs/experiments.md)（§15/§16/§17/§18）。
 > 本文件只留"不知道会出事"的部分。
+
+## 训练主机（pro）与三路由
+
+本仓的换代循环与 GPU 训练**自 2026-10-04 起在 pro 上跑**——这是全项目群的**唯一例外**，
+其余仓仍是全局 `../AGENTS.md` 的双设备路由（Windows + 70Ti）。本仓是三路由：
+
+| 设备 | 路径 | 本仓用途 |
+|---|---|---|
+| Windows 本机 | 本仓工作副本 | 代码编辑、文档、纯 Python 单测 |
+| **pro**（`ssh -p 26657 fwj@connect.westd.seetacloud.com`，RTX PRO 6000 96 GB，cgroup 22 核） | `/root/autodl-tmp/fwj/UniChess`（HOME 同盘） | **换代循环、GPU 训练/评测** |
+| 远端 5070 Ti（`jeefy@172.16.2.12`，SSH 免密） | `~/UniChess/Transformer` | **生产引擎（Server 的 T 插件）+ 备份**（权重只在 pro 训练完 scp 过去） |
+
+**pro 的关键坑**（详细迁移记录与吞吐实测见 `docs/experiments.md` §18.26-27）：
+- cgroup 只有 **22 核**（nproc 报 208 是宿主，别信）；torch 默认开 104 线程池会在 22 核上互踩
+  → 训练/自对弈**必须 `OMP_NUM_THREADS=4`**（漏了会看到 worker 烧 ~500% CPU 且初始化拖几分钟）；
+- `/tmp` 不可写 → `TMPDIR=$HOME/UniChess/tmp`（已进 .bashrc）；
+  **临时脚本一律放 `~/UniChess/tmp`，家目录不放**（用户指示）；
+- pro 的工作树是路径补丁过的"脏"树 → **禁止 git pull**，代码更新只能 scp 具体文件；
+- **起 loop 前必须 `cd /root/autodl-tmp/fwj/UniChess`**（否则 `-m Kit` 找不到包）；
+- 自对弈多进程常态：`workers=4 × concurrency=32` + **MPS 守护**
+  （`setsid nvidia-cuda-mps-control -d`，pipe/日志在 `~/UniChess/tmp/mps_*`，loop 启动 env 带
+  `CUDA_MPS_PIPE_DIRECTORY/CUDA_MPS_LOG_DIRECTORY`）→ 实测 ~5.3 s/局（单进程 15-17）；
+- pro 与用户自己的其他任务（ICLR 实验等）**共用 GPU**，动 GPU 前先 `nvidia-smi` 看占用、
+  别动对方进程；
+- 换代中途重启要用"剩余局数"法续跑（顶层 `games` 改成剩余 → loop 的
+  `first_game=g*games` 生成不相交局号段），**事后必须恢复 4096**——忘了的话后续代
+  都只打半量局（gen 11 就中过招，见 §18.27/28）。
 
 ## 仓库形态
 
@@ -30,6 +57,8 @@
 `train/` 五个脚本、`tools/`、`eval/`、`logs/`、`benchmark_transformer.py`、`uci.py`。
 
 ## 常用命令
+
+（`Kit loop` 与 GPU 相关命令在 **pro** 上跑，见上方「训练主机」节；单测无 torch 也能跑的部分在本机。）
 
 ```bash
 cd ~/UniChess
