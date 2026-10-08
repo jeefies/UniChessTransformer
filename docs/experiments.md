@@ -2226,3 +2226,65 @@ gen_0007 同一张网：2400 sims vs 800 sims，34 局（26 胜 0 负 8 和）�
   与 stage2 的 bs512 筛选用的是同一有效批；按固定配置仍然逐位可复现（E4 口径）。
 - `Kit 3fdc8e5`：训练摘要新增 `peak_vram_mb`，以后每代落盘可查。
 
+## §18.26 迁移 pro（2026-10-08 补记）
+
+- **主机**：seetacloud 容器（`ssh -p 26657 fwj@...`），RTX PRO 6000 Blackwell 96 GB；
+  **cgroup 22 核**（`cpu.max` 2200000/100000，nproc 报 208 是宿主）/ 110 GB RAM；共享宿主，
+  **单核速度波动大**（同一配置实测 16→42 s/局）。`/tmp` 不可写 →
+  `TMPDIR=~/UniChess/tmp`（已进 .bashrc）；**临时脚本一律放 `~/UniChess/tmp`**（用户指示，
+  家目录保持干净）。uid 1004（非 root，ptrace 受限 → py-spy 不可用）。
+- **环境**：`~/miniconda3/envs/unichess`（Python 3.12.15、torch 2.14.1+cu130，Blackwell 正常）；
+  conda 走清华源、pip 走阿里源。全套件 375 项、4 项失败均为 `TestParityWithR`（R 权重未迁移，
+  与 T 无关）。**工作树"脏"**：96 个文件的路径被改成 pro 前缀 → **禁止在 pro 上 git pull**，
+  代码更新只能 scp 具体文件。
+- 70Ti 退为**网站 + 备份**（生产 = gen_0007）；网站 chess.jeefy.top 一直在 70Ti。
+- 与 70Ti 同配方吞吐对比：70Ti 12.6 s/局 vs pro 单进程 15-17 s/局（机器差距一截，
+  主要是共享单核慢）；**workers=4 后 pro ~5.3 s/局**（见 §18.27）。
+
+## §18.27 workers=4 + MPS：吞吐 ~3×（2026-10-08）
+
+- **配置**：`selfplay.workers=4 × concurrency=32`；MPS 守护
+  （`nvidia-cuda-mps-control -d`，pipe/日志在 `~/UniChess/tmp/mps_*`，setsid 起、
+  loop 启动前必须活着）；**`OMP_NUM_THREADS=4`**。arena/screen workers 也提到 4
+  （`8b5d1c4`）；训练微批 64×32→256×8（96 GB 显存宽裕，训练 ~12→~6 min/代）。
+- **实测稳态**：4 worker 各 ~100% CPU、GPU 79-92%（单进程 30%）、显存 5.6 GB、
+  **~5.3 s/局聚合（原 15-17 s/局，≈3×）**。与并存的 ICLR 任务（~50 GB）共存无压力。
+- **重要修正（之前两次"workers 失败"是误诊）**：torch 在 pro 上默认开 **104 线程池**
+  （nproc/2），4 个 worker 并行初始化模型时在 22 核配额上互踩，把 ~3 s 的初始化拖到
+  3.5 分钟；MPS 连接日志证明 worker 在 +3.5 min 才完成 CUDA 初始化，而两次都在第 4-5
+  分钟被杀，**从未见过稳态**。当时归因"CPU 回退"也是错的（`kit.py` 的
+  `make_evaluators` 硬编码 `device="cuda"`，CUDA 不可用会崩、不会静默回退）。
+  修复 = `OMP_NUM_THREADS=4`，零代码改动。
+- **续跑的局号机制**：`loop.py phase_selfplay` 强制 `first_game = g*games`。换代中途
+  切 workers 时把顶层 `games` 改成剩余局数即可得到**不相交的新局号段**（与主分片零重复
+  零重放）；gen 10 = 主分片 1947 局（[40960,42907)）+ w0-w3 共 2149 局（[21490,23639)）
+  = 4096。⚠ **该值必须事后恢复 4096**，否则后续代都只打半量局——gen 11 就中招
+  （wakeup 迟触发 6 h，gen 11 只训了 2149 局、gen 12 头 2014 局作废归档
+  `~/UniChess/tmp/archive_gen12_partial_1008`）。
+- **离线微基准**（干净 GPU，混合 strata 批，gen_0007 权重 fp16）：
+  旧前向 12.5 ms（~300 次 kernel 发射占 ~68%，批 1→128 几乎平坦 = 纯开销型）；
+  **CPU 侧路由**（`aeb22b4`，去掉批内逐行 `.item()` 同步 0.76 ms）11.0 ms（1.14×，
+  **数值逐位一致**）；**CUDA graph 原型**（单专家 m=64 含 softmax）2.15 ms（**5.83×，
+  同形状回放 max|Δ|=0**）；**torch.compile reduce-overhead** 1.72 ms（7.26×）。
+  → graph 化是下一个大杠杆（工程化待做，预期整体再 +15-25%）；已证伪的并行旋钮：
+  threads>1（GIL）、workers>4 无 MPS（context 切换）、conc≥128。
+
+## §18.28 gen 10 判决：H1（+92.9）——新范式首次晋升（2026-10-08）
+
+- **gen 10 = Gumbel π′ + anchor_b2 新范式第一次通过 arena**：
+  score_a **0.6306**、Elo **+92.93**（CI95 [31.6, 160.6]）、111 局 SPRT 早停、
+  arena 65 min（workers=4）。**冠军换成 gen_0010**（此前 8/9 连续 H0，gen 7 之后首次晋升）。
+  生产权重仍在 70Ti（gen_0007），切换待人工确认。
+- **数据质量（比判决更重要，全量 4096 局 401k 记录实测）**：
+  - 位置重复率 **6.92%**（gen_0009 是 75.89%）；**全序列重复局 1.25%**（51/4096）；
+  - 2000 条开局全部用上（2000 组、组均 2 局）；组内首次分歧 **中位 ply 9**
+    （382 局恰在 ply 7 = book 后第一步就分岔）；
+  - π′ 顶部 16 槽平均 **6.54 个非零**（p90 = 16 触顶）、归一化熵 0.163、top-1 占比 0.826
+    ——明显比集中式 PUCT（1-3 个非零）分散；
+  - 终局：checkmate 91.5%、和棋 8.4%；步数 mean 98 / median 75。
+  - 口径注：Gumbel 在 book ply 也做完整搜索并落 π′ 记录（走 book 着法）——设计如此
+    （`gumbel_player.py` 模块注释），与 SearchPlayer 的"book 不落记录"不同。
+- **gen 11 = H0（−67.9，57 局）但被半量数据污染**（只训 2149 局，见 §18.27 的 games 事故），
+  结论不读方向只记事件。gen 12 起恢复 4096 局 + **c_scale=0.02**（用户定的实验值；
+  注意 Gumbel 的 c_scale 在 SSM/AGENTS.md §8 是 LOCKED 0.1，此为 T 侧实验）。
+

@@ -17,7 +17,7 @@ python -m Kit loop Transformer/configs/loop_p4_v2.json   # 在跑的（激进版
 | 每代记录 | `Transformer/runs/loop_p4_v2/loop.jsonl` |
 | 每代产物 | `gen_XXXX/{selfplay/,train_<label>/,screen_<label>.jsonl,arena.jsonl.summary.json,search.json}` |
 | 日志 | `loop.log`，各子进程 `.log` 同目录 |
-| loop PID | `/tmp/unichess_t_loop_v2.pid` |
+| loop PID | pro：`~/unichess_t_loop_v2.pid`（旧 70Ti 的 `/tmp/...` 已废弃） |
 
 **换代的唯一依据**是 arena 的 SPRT 结论：判决 H1 才更新 `loop_state.json` 的 champion。
 生产预设（`config.json` 的 `max_mcts` / `max_t`，当前指向
@@ -27,19 +27,25 @@ gen 1（+73.8）与 gen 3（+65.1）两个 arena 验证的新冠军都以该文�
 血统：`stratified_p4_selfplay_corrected/best_model.pt` → loop_p4 gen0 +163
 → v2 gen1 +73.8 → v2 gen3 +65.1。回滚 = 改回旧 ckpt 路径后重启。
 
-截至 **2026-10-02 13:25 本地**：**v2 十代已全部跑完**（`generations: 10` 的下限到了，
-`Loop.run()` 正常返回，`loop.log` 末行是 `main()` 打印的返回值——**不是崩溃**）。
-冠军 = `gen_0007/train/best_model.pt` = **现生产权重**，一致。
+**训练机已迁到 pro**（2026-10-04，seetacloud；规格与迁移记录见
+`experiments.md` §18.26，吞吐优化见 §18.27）：workers=4 + MPS +
+`OMP_NUM_THREADS=4`，~5.3 s/局（原 70Ti 12.6、pro 单进程 15-17）；
+**训练/arena 微批 256×8、workers=4**。70Ti 只跑网站与备份，生产权重仍是
+gen_0007——**gen 10 已判 H1（+92.9），生产切换待人工确认**。
+
+截至 **2026-10-08 11:37 本地**：gen 12 自对弈在跑（首个 **c_scale=0.02** 代，
+games 已恢复 4096）。gen 10 用 `games=2149` 续跑收尾（局号段不相交，零重复）。
 
 | 代 | 判决 | Elo | score_a | 局数 | CI95 含 0？ |
 |---|---|---|---|---|---|
-| gen 1 / 3 / 7 | **H1 换代** | +73.81 / +65.09 / +49.98 | 0.60 / 0.59 / 0.57 | 43 / 81 / 133 | — |
+| gen 1 / 3 / 7 / **10** | **H1 换代** | +73.81 / +65.09 / +49.98 / **+92.93** | 0.60 / 0.59 / 0.57 / 0.63 | 43 / 81 / 133 / 111 | — |
 | gen 0 / 2 / 5 / 6 / 8 | H0 | +41.5 / +44.8 / −15.5 / −9.4 / −52.0 | — | 101 / 39 / 45 / 37 / 74 | 是 |
 | gen 4 / 9 | H0 **显著更差** | −74.83 / **−157.34** | 0.394 / **0.288** | 33 / 33 | gen4 是，**gen9 否（[−303.5, −50.8]）** |
+| gen 11 | H0（**半量数据污染**，不读方向） | −67.9 | 0.404 | 57 | 见 §18.28 |
 
-血统链（每步 H1 验证，现生产 = gen_0007）：
+血统链（每步 H1 验证，gen 10 待上产）：
 `stratified_p4_selfplay_corrected` → loop_p4 gen0（+163）→ v2 gen1（+73.8）
-→ v2 gen3（+65.1）→ **v2 gen7（+50.0）**。
+→ v2 gen3（+65.1）→ v2 gen7（+50.0）→ **v2 gen10（+92.9，新范式：Gumbel π′ + anchor）**。
 
 ⚠ **最关键的新证据（`experiments.md` §18.20）**：gen 7/8/9 三代**同一个 base**，
 training loss 全大幅下降（−0.146 / −0.082 / −0.113），但 Elo 是 **+50 / −52 / −157**。
