@@ -5,6 +5,7 @@
 """
 from __future__ import annotations
 
+import gc
 import os
 import sys
 import unittest
@@ -92,6 +93,7 @@ class TestCudaGraphParity(unittest.TestCase):
         self.assertGreaterEqual(st["buckets"], 1)
         self.assertEqual(st["capture_fails"], 0)
         del eager, graphed
+        gc.collect()
         torch.cuda.empty_cache()
 
     def test_fp16_shapes(self):
@@ -103,18 +105,25 @@ class TestCudaGraphParity(unittest.TestCase):
             self._check("fp32", n, seed=100 + n)
 
     def test_bucket_limit_falls_back(self):
-        """桶数压到 1：第二个 key 必须走 eager 且结果仍正确。"""
+        """桶数压到 1：第二个形状起必须走 eager 且结果仍正确。
+
+        capture-on-repeat 语义：每个形状调两次——第一次缓建（eager），第二次才
+        尝试捕获；桶上限 1 之下第 2/3 个形状的捕获必然失败 → 落 eager_keys。
+        """
         old = ev._GRAPH_MAX_BUCKETS
         ev._GRAPH_MAX_BUCKETS = 1
         try:
             eager, graphed = self._pair("fp16")
             for n in (4, 7, 9):
                 xs = _rand_planes(n, seed=7 + n)
-                a, b = eager.evaluate_planes(xs), graphed.evaluate_planes(xs)
-                for x, y in zip(a, b):
-                    self.assertTrue(torch.equal(torch.from_numpy(x), torch.from_numpy(y)),
-                                    f"N={n} 回退路径不一致")
-            self.assertGreaterEqual(graphed.graph_stats()["eager_keys"], 2)
+                for _ in range(2):
+                    a, b = eager.evaluate_planes(xs), graphed.evaluate_planes(xs)
+                    for x, y in zip(a, b):
+                        self.assertTrue(torch.equal(torch.from_numpy(x), torch.from_numpy(y)),
+                                        f"N={n} 回退路径不一致")
+            st = graphed.graph_stats()
+            self.assertLessEqual(st["buckets"], 1)
+            self.assertGreaterEqual(st["eager_keys"], 2)
             del eager, graphed
             torch.cuda.empty_cache()
         finally:
