@@ -169,8 +169,6 @@
       },
       "workers": 4
     },
-      "workers": 4
-    },
     "gate": {
       "kind": "sprt"
     }
