@@ -2608,3 +2608,8 @@ A = gen_0014 候选（gen_0010 的数据 + 锁定变体 lr 5e-4 训练），B = 
   但 SPRT 判决在 266 局越界那一刻已冻结，不受在途局影响
 - champion 变更只发生在 loop（`loop_state.json`），**生产仍跑 gen_0010**；切换需人工改
   70Ti 的 `Server/config.json` 预设 + 重启 `unichess-server`
+- **2026-10-10 18:30 生产已切到 gen_0014**（用户决定）：权重 pro→本地→70Ti 中转
+  （sha256 `08017161…` 三地一致），`Transformer/config.json` 两个预设（max_mcts/max_t）
+  的 ckpt 改指 gen_0014，提交 `688af2b`，70Ti fast-forward 后重启 `unichess-server`；
+  验证：health OK（7 模型）、建局引擎执白自动走 e4、人类 e7e5 后引擎回应 Nf3、
+  两预设均可建局。回滚 = 两个 ckpt 改回 gen_0010 + 重启（权重仍在盘上）
