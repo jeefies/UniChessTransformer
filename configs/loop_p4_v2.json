@@ -154,18 +154,21 @@
   "export": "best_model.pt",
   "arena": {
     "match": {
-      "pairs": 512,
+      "pairs": 350,
       "seed": 20260926,
       "max_plies": 400,
-      "concurrency": 8,
-      "openings": "/home/jeefy/UniChess/Kit/data/openings_sp.txt",
+      "concurrency": 64,
+      "openings": "/root/autodl-tmp/fwj/UniChess/Kit/data/openings_sp.txt",
       "simulations": 2400,
       "sprt": {
         "elo0": 0.0,
-        "elo1": 60.0,
+        "elo1": 25.0,
         "alpha": 0.05,
-        "beta": 0.1
+        "beta": 0.1,
+        "min_pairs": 100
       },
+      "workers": 4
+    },
       "workers": 4
     },
     "gate": {
