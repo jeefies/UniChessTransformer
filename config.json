@@ -1,6 +1,6 @@
 {
   "max_mcts": {
-    "ckpt": "/home/jeefy/UniChess/Transformer/runs/loop_p4_v2/gen_0010/train/best_model.pt",
+    "ckpt": "/home/jeefy/UniChess/Transformer/runs/loop_p4_v2/gen_0014/train/best_model.pt",
     "mcts_sims": 2400,
     "mcts_batch": 64,
     "device": "cuda",
@@ -9,7 +9,7 @@
     "description": "UniChess-Loop P4 v2 gen10 (Max MCTS 2400; arena +92.9 Elo H1 vs gen7, Gumbel pi' + anchor)"
   },
   "max_t": {
-    "ckpt": "/home/jeefy/UniChess/Transformer/runs/loop_p4_v2/gen_0010/train/best_model.pt",
+    "ckpt": "/home/jeefy/UniChess/Transformer/runs/loop_p4_v2/gen_0014/train/best_model.pt",
     "mcts_sims": 2400,
     "mcts_batch": 64,
     "device": "cuda",
