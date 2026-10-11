@@ -1,7 +1,7 @@
 {
   "out": "/home/jeefy/UniChess/Transformer/runs/loop_p4_v2",
   "seed_base": 20260930,
-  "generations": 16,
+  "generations": 32,
   "initial": "/home/jeefy/UniChess/Transformer/runs/loop_p4/gen_0000/train/final.pt",
   "games": 4096,
   "window": 2,
@@ -38,29 +38,29 @@
         "data": {
           "kind": "mix",
           "batch_size": 256,
-            "sources": [
-              {
-                "weight": 0.3,
-                "shards": {
-                  "dir": "/home/jeefy/UniChess/ResNet/data/shards_evals",
-                  "pattern": "evals_*.bin",
-                  "slice": [
-                    0,
-                    4
-                  ]
-                },
-                "repair_castling": false,
-                "q_ratio": 0.0
+          "sources": [
+            {
+              "weight": 0.3,
+              "shards": {
+                "dir": "/home/jeefy/UniChess/ResNet/data/shards_evals",
+                "pattern": "evals_*.bin",
+                "slice": [
+                  0,
+                  4
+                ]
               },
-              {
-                "weight": 0.7,
-                "shards": {
-                  "files": "{selfplay_files}"
-                },
-                "repair_castling": false,
-                "q_ratio": 0.0
-              }
-            ]
+              "repair_castling": false,
+              "q_ratio": 0.0
+            },
+            {
+              "weight": 0.7,
+              "shards": {
+                "files": "{selfplay_files}"
+              },
+              "repair_castling": false,
+              "q_ratio": 0.0
+            }
+          ]
         },
         "loss": {
           "kind": "t_chess",
