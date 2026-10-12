@@ -9,13 +9,14 @@
 ## 训练主机（pro）与三路由
 
 本仓的换代循环与 GPU 训练**自 2026-10-04 起在 pro 上跑**——这是全项目群的**唯一例外**，
-其余仓仍是全局 `../AGENTS.md` 的双设备路由（Windows + 70Ti）。本仓是三路由：
+其余仓仍是全局 `../AGENTS.md` 的"本机 + 单远端（域名 `jeefy@ulab.jeefy.top` 优先，
+内网 `172.16.2.12` 兜底）"路由。本仓是三路由：
 
 | 设备 | 路径 | 本仓用途 |
 |---|---|---|
 | Windows 本机 | 本仓工作副本 | 代码编辑、文档、纯 Python 单测 |
 | **pro**（`ssh -p 26657 fwj@connect.westd.seetacloud.com`，RTX PRO 6000 96 GB，cgroup 22 核） | `/root/autodl-tmp/fwj/UniChess`（HOME 同盘） | **换代循环、GPU 训练/评测** |
-| 远端 5070 Ti（`jeefy@172.16.2.12`，SSH 免密） | `~/UniChess/Transformer` | **生产引擎（Server 的 T 插件）+ 备份**（权重只在 pro 训练完 scp 过去） |
+| 远端 5070 Ti（`jeefy@ulab.jeefy.top`，域名优先；内网 `172.16.2.12` 兜底） | `~/UniChess/Transformer` | **生产引擎（Server 的 T 插件）+ 备份**（权重只在 pro 训练完 scp 过去） |
 
 **pro 的关键坑**（详细迁移记录与吞吐实测见 `docs/experiments.md` §18.26-27）：
 - cgroup 只有 **22 核**（nproc 报 208 是宿主，别信）；torch 默认开 104 线程池会在 22 核上互踩
@@ -59,6 +60,10 @@
 ## 常用命令
 
 （`Kit loop` 与 GPU 相关命令在 **pro** 上跑，见上方「训练主机」节；单测无 torch 也能跑的部分在本机。）
+
+**绝对禁止 `python -c` / 内联脚本**（本机 PowerShell → ssh → bash 多层引号必把它拆坏）。
+要看一小段输出也照此办：本机写好 `.py` → scp 到 pro 的 `/root/autodl-tmp/fwj/UniChess/tmp/`
+→ `~/miniconda3/envs/unichess/bin/python <路径>` 执行。
 
 ```bash
 cd ~/UniChess
