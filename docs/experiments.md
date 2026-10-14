@@ -2965,6 +2965,28 @@ python-chess 按 **dict 插入顺序**发 setoption，而 SF 要求 **`UCI_Limit
 （标签在 SF 自己的参考时限下才准；实测 200ms/500ms 都压缩，1s 量级的验证 +
 四档扫描约需 3-5 小时 GPU）。
 
+### Stockfish 有没有官方的 Elo 口径？——没有（2026-10-14 查证）
+
+三处都查过，结论是 **SF 官方从不发布自己的 Elo**：
+
+1. **官方 README**（`official-stockfish/Stockfish`）：全文只说 "a free and strong UCI
+   chess engine"，没有任何评级数字；`help` 命令的输出同样没有。
+2. **二进制选项声明**（本地 SF19 实测）：`UCI_Elo` spin 1320–3190、
+   `UCI_LimitStrength` check 默认 false、`Skill Level` spin 0–20。
+   源码 `engine.cpp` 里 `UCI_Elo` 的上下界就是 `Skill::LowestElo`/`HighestElo`
+   两个常量——它是一个**限强选项**，不是自我评级。
+3. **源码 `search.cpp`**：`Skill(options["Skill Level"],
+   options["UCI_LimitStrength"] ? int(options["UCI_Elo"]) : 0)`——**UCI_Elo 只在
+   UCI_LimitStrength 为真时才生效**（这正是前面那个配置 bug 的根因）；生效时
+   MultiPV 被提到 ≥4，`skill.pick_best()` 从多条 PV 里挑一条次优的。
+   也就是说它是"**故意下欠佳一手**"的让子机制，目标 Elo 由 SF 团队标定，
+   **标定用的时间控制没有写在任何文档里**。
+
+所以"引用 SF 官方 Elo"这条路不存在。业界实际使用的参考是**第三方评级列表**
+（CCRL / CEGT / FRL），它们在固定时间控制 + 标准开局书 + 受控硬件下测得；
+但那些都在长时限（如 CCRL 40/15），我们的模型在那种设定下得分率是 0，
+Elo 估不出来，**无法给我们当锚点**。这也是最终只能报节点等价口径的原因。
+
 ---
 
 ## §18.40 C1 联盟自对弈 A/B：对手多样性是唯一未检验的杠杆（进行中）
